@@ -3,12 +3,15 @@
 import os
 import sass
 import datetime
+import frontmatter
+import markdown
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
 BASEDIR = os.path.dirname(os.path.realpath(__file__)) or '.'
 DIRS = {
-    'content': BASEDIR + '/content', # templates, really
+    'templates': BASEDIR + '/templates', # Mako templates
+    'content': BASEDIR + '/content',  # Markdown files
     'output': BASEDIR + '/htdocs',
     'static': BASEDIR + '/static',
     'assets': BASEDIR + '/assets',
@@ -20,8 +23,8 @@ def main():
     actions = []
     ensure_dirs()
     # render templates
-    lookup = TemplateLookup(directories=[DIRS['content']])
-    templates = get_templates(DIRS['content'])
+    lookup = TemplateLookup(directories=[DIRS['templates']])
+    templates = get_templates(DIRS['templates'])
     for tpl in templates:
         # NOTE: very crude, not affected by template dependencies
         if is_older_than(tpl['src_path'], tpl['target']):
@@ -34,7 +37,20 @@ def main():
         with open(tpl['target'], 'w') as f:
             f.write(template.render(**data))
         actions.append('[%s] - template: %s' % (
-            str(dateitime.datetime.now()), tpl['src']))
+            str(datetime.datetime.now()), tpl['src']))
+    content = get_content(DIRS['content'])
+    for ct in content:
+        if is_older_than(ct['source_file'], ct['target']):
+            continue
+        template = lookup.get_template(ct['template'])
+        maybe_mkdir(ct['target'])
+        data = ct['data']
+        data['CONTENT'] = markdown.markdown(ct['doc'], extensions=['extra', 'sane_lists'])
+        data['RAW_CONTENT'] = ct['doc']
+        with open(ct['target'], 'w') as f:
+            f.write(template.render(**data))
+        actions.append('[%s] - content: %s' % (
+            str(datetime.datetime.now()), tpl['src']))
     # copy static files
     os.system("rsync -a --exclude=.keep %s/ %s/" % (DIRS['static'], DIRS['output']))
     # compile assets (only scss for now):
@@ -49,6 +65,32 @@ def main():
     if actions:
         print("\n".join(actions))
 
+def get_content(ctdir):
+    content = []
+    default_template = 'md_base.mhtml'
+    default_pretty_path = True
+    for root, dirs, files in os.walk(ctdir):
+        for fn in files:
+            if not fn.endswith('.md'):
+                continue
+            if fn.startswith('_') or fn.startswith('.'):
+                continue
+            source_file = os.path.join(root, fn)
+            with open(source_file) as f:
+                meta, doc = frontmatter.parse(f.read())
+            template = meta.get('template', default_template)
+            pretty_path = meta.get('pretty_path', default_pretty_path)
+            html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
+            html_dir = root.replace(ctdir, DIRS['output'], 1)
+            content.append({
+                'source_file': source_file,
+                'source_file_short': source_file.replace(ctdir, '', 1),
+                'target': os.path.join(html_dir, html_fn),
+                'template': template,
+                'data': meta,
+                'doc': doc,
+            })
+    return content
 
 def get_templates(tpldir):
     templates = []

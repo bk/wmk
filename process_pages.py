@@ -14,16 +14,50 @@ from mako.lookup import TemplateLookup
 
 
 def main(basedir=None):
-    actions = []
+    """
+    Builds/copies everything into the output dir (htdocs).
+    """
     if basedir is None:
         basedir = os.path.dirname(os.path.realpath(__file__)) or '.'
     if not os.path.isdir(basedir):
         raise Exception('{} is not a directory'.format(basedir))
     dirs = get_dirs(basedir)
     ensure_dirs(dirs)
+    # Global data for template rendering, used by both process_templates
+    # and process_markdown_content.
+    template_vars = {'DATADIR': os.path.realpath(dirs['data'])}
     # render templates
     lookup = TemplateLookup(directories=[dirs['templates']])
     templates = get_templates(dirs['templates'], dirs['output'])
+    process_templates(templates, template_vars)
+    # render Markdown content
+    content = get_content(
+        dirs['content'], dirs['data'], dirs['output'], template_vars)
+    process_markdown_content(content)
+    # copy static files
+    os.system("rsync -a --exclude=.keep %s/ %s/" % (dirs['static'], dirs['output']))
+    # compile assets (only scss for now):
+    process_assets(dirs['assets'], dirs['output'])
+
+
+def get_dirs(basedir):
+    """
+    Configuration of subdirectory names relative to the basedir.
+    """
+    return {
+        'templates': basedir + '/templates', # Mako templates
+        'content': basedir + '/content',  # Markdown files
+        'output': basedir + '/htdocs',
+        'static': basedir + '/static',
+        'assets': basedir + '/assets', # only scss for now
+        'data': basedir + '/data', # YAML, potentially sqlite
+    }
+
+
+def process_templates(templates, template_vars):
+    """
+    Renders the specified templates into the outputdir.
+    """
     for tpl in templates:
         # NOTE: very crude, not affected by template dependencies
         if is_older_than(tpl['src_path'], tpl['target']):
@@ -31,13 +65,18 @@ def main(basedir=None):
         template = lookup.get_template(tpl['src'])
         #data = get_data(tpl['data'], datadir=datadir)
         #kannski byggt á tpl.module.DATA attribute?
-        data = {}
+        data = template_vars
         maybe_mkdir(tpl['target'])
         with open(tpl['target'], 'w') as f:
             f.write(template.render(**data))
-        actions.append('[%s] - template: %s' % (
+        print('[%s] - template: %s' % (
             str(datetime.datetime.now()), tpl['src']))
-    content = get_content(dirs['content'], dirs['data'], dirs['output'])
+
+
+def process_markdown_content(content):
+    """
+    Renders the specified markdown content into the outputdir.
+    """
     for ct in content:
         if is_older_than(ct['source_file'], ct['target']):
             continue
@@ -48,35 +87,31 @@ def main(basedir=None):
         data['RAW_CONTENT'] = ct['doc']
         with open(ct['target'], 'w') as f:
             f.write(template.render(**data))
-        actions.append('[%s] - content: %s' % (
+        print('[%s] - content: %s' % (
             str(datetime.datetime.now()), ct['source_file']))
-    # copy static files
-    os.system("rsync -a --exclude=.keep %s/ %s/" % (dirs['static'], dirs['output']))
-    # compile assets (only scss for now):
-    scss_input = os.path.join(dirs['assets'], 'scss')
-    css_output = os.path.join(dirs['output'], 'css')
+
+
+def process_assets(assetdir, outputdir):
+    """
+    Compiles assets from assetdir into outputdir.
+    Only handles sass/scss files in the sass subdirectory for now.
+    """
+    scss_input = os.path.join(assetdir, 'scss')
+    if not os.path.exists(scss_input):
+        return
+    css_output = os.path.join(outputdir, 'css')
     if not os.path.exists(css_output):
         os.mkdir(css_output)
-    if os.path.exists(scss_input) and not dir_is_older_than(scss_input, css_output):
+    if not dir_is_older_than(scss_input, css_output):
         sass.compile(
             dirname=(scss_input, css_output), output_style='expanded')
-        actions.append('[%s] - sass: refresh' % datetime.datetime.now())
-    if actions:
-        print("\n".join(actions))
+        print('[%s] - sass: refresh' % datetime.datetime.now())
 
 
-def get_dirs(basedir):
-    return {
-        'templates': basedir + '/templates', # Mako templates
-        'content': basedir + '/content',  # Markdown files
-        'output': basedir + '/htdocs',
-        'static': basedir + '/static',
-        'assets': basedir + '/assets',
-        'data': basedir + '/data',
-    }
-
-
-def get_content(ctdir, datadir, outputdir):
+def get_content(ctdir, datadir, outputdir, template_vars):
+    """
+    Get those markdown files that need processing.
+    """
     content = []
     default_template = 'md_base.mhtml'
     default_pretty_path = True
@@ -89,6 +124,7 @@ def get_content(ctdir, datadir, outputdir):
             source_file = os.path.join(root, fn)
             with open(source_file) as f:
                 meta, doc = frontmatter.parse(f.read())
+            meta.update(template_vars)
             template = meta.get('template', default_template)
             pretty_path = meta.get('pretty_path', default_pretty_path)
             if 'LOAD' in meta:
@@ -112,6 +148,9 @@ def get_content(ctdir, datadir, outputdir):
 
 
 def get_templates(tpldir, outputdir):
+    """
+    Get those templates that need processing.
+    """
     templates = []
     for root, dirs, files in os.walk(tpldir):
         if root.endswith('/base'):

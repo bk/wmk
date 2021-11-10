@@ -23,21 +23,24 @@ def main(basedir=None):
         raise Exception('{} is not a directory'.format(basedir))
     dirs = get_dirs(basedir)
     ensure_dirs(dirs)
+    # 1) copy static files
+    os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
+    # 2) compile assets (only scss for now):
+    process_assets(dirs['assets'], dirs['output'])
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
-    template_vars = {'DATADIR': os.path.realpath(dirs['data'])}
-    # render templates
+    template_vars = {
+        'DATADIR': os.path.realpath(dirs['data']),
+        'WEBROOT': os.path.realpath(dirs['htdocs']),
+    }
+    # 3) render templates
     lookup = TemplateLookup(directories=[dirs['templates']])
     templates = get_templates(dirs['templates'], dirs['output'])
     process_templates(templates, template_vars)
-    # render Markdown content
+    # 4) render Markdown content
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'], template_vars)
     process_markdown_content(content)
-    # copy static files
-    os.system("rsync -a --exclude=.keep %s/ %s/" % (dirs['static'], dirs['output']))
-    # compile assets (only scss for now):
-    process_assets(dirs['assets'], dirs['output'])
 
 
 def get_dirs(basedir):

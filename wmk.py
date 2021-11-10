@@ -31,16 +31,16 @@ def main(basedir=None):
     # and process_markdown_content.
     template_vars = {
         'DATADIR': os.path.realpath(dirs['data']),
-        'WEBROOT': os.path.realpath(dirs['htdocs']),
+        'WEBROOT': os.path.realpath(dirs['output']),
     }
     # 3) render templates
     lookup = TemplateLookup(directories=[dirs['templates']])
     templates = get_templates(dirs['templates'], dirs['output'])
-    process_templates(templates, template_vars)
+    process_templates(templates, lookup, template_vars)
     # 4) render Markdown content
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'], template_vars)
-    process_markdown_content(content)
+    process_markdown_content(content, lookup)
 
 
 def get_dirs(basedir):
@@ -57,7 +57,7 @@ def get_dirs(basedir):
     }
 
 
-def process_templates(templates, template_vars):
+def process_templates(templates, lookup, template_vars):
     """
     Renders the specified templates into the outputdir.
     """
@@ -76,7 +76,7 @@ def process_templates(templates, template_vars):
             str(datetime.datetime.now()), tpl['src']))
 
 
-def process_markdown_content(content):
+def process_markdown_content(content, lookup):
     """
     Renders the specified markdown content into the outputdir.
     """

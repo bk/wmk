@@ -23,16 +23,18 @@ def main(basedir=None):
         raise Exception('{} is not a directory'.format(basedir))
     dirs = get_dirs(basedir)
     ensure_dirs(dirs)
+    conf = get_config(basedir)
     # 1) copy static files
     os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
     # 2) compile assets (only scss for now):
-    process_assets(dirs['assets'], dirs['output'])
+    process_assets(dirs['assets'], dirs['output'], conf)
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
         'DATADIR': os.path.realpath(dirs['data']),
         'WEBROOT': os.path.realpath(dirs['output']),
     }
+    template_vars.update(conf.get('template_context', {}))
     # 3) render templates
     lookup = TemplateLookup(directories=[dirs['templates']])
     templates = get_templates(dirs['templates'], dirs['output'])
@@ -40,7 +42,7 @@ def main(basedir=None):
     # 4) render Markdown content
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'], template_vars)
-    process_markdown_content(content, lookup)
+    process_markdown_content(content, lookup, conf)
 
 
 def get_dirs(basedir):
@@ -55,6 +57,15 @@ def get_dirs(basedir):
         'assets': basedir + '/assets', # only scss for now
         'data': basedir + '/data', # YAML, potentially sqlite
     }
+
+
+def get_config(basedir):
+    filename = os.path.join(basedir, 'wmk_config.yaml')
+    conf = {}
+    if os.path.exists(filename):
+        with open(filename) as f:
+           conf = yaml.safe_load(f) or {}
+    return conf
 
 
 def process_templates(templates, lookup, template_vars):
@@ -76,7 +87,7 @@ def process_templates(templates, lookup, template_vars):
             str(datetime.datetime.now()), tpl['src']))
 
 
-def process_markdown_content(content, lookup):
+def process_markdown_content(content, lookup, conf):
     """
     Renders the specified markdown content into the outputdir.
     """
@@ -86,7 +97,10 @@ def process_markdown_content(content, lookup):
         template = lookup.get_template(ct['template'])
         maybe_mkdir(ct['target'])
         data = ct['data']
-        data['CONTENT'] = markdown.markdown(ct['doc'], extensions=['extra', 'sane_lists'])
+        extensions = conf.get('markdown_extensions', None)
+        if extensions is None:
+            extensions = ['extra', 'sane_lists']
+        data['CONTENT'] = markdown.markdown(ct['doc'], extensions=extensions)
         data['RAW_CONTENT'] = ct['doc']
         with open(ct['target'], 'w') as f:
             f.write(template.render(**data))
@@ -94,7 +108,7 @@ def process_markdown_content(content, lookup):
             str(datetime.datetime.now()), ct['source_file']))
 
 
-def process_assets(assetdir, outputdir):
+def process_assets(assetdir, outputdir, conf):
     """
     Compiles assets from assetdir into outputdir.
     Only handles sass/scss files in the sass subdirectory for now.
@@ -106,8 +120,9 @@ def process_assets(assetdir, outputdir):
     if not os.path.exists(css_output):
         os.mkdir(css_output)
     if not dir_is_older_than(scss_input, css_output):
+        output_style = conf.get('sass_output_style', 'expanded')
         sass.compile(
-            dirname=(scss_input, css_output), output_style='expanded')
+            dirname=(scss_input, css_output), output_style=output_style)
         print('[%s] - sass: refresh' % datetime.datetime.now())
 
 

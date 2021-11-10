@@ -100,8 +100,24 @@ content and output. They will be created if they do not exist:
   `htdocs` will not disappear automatically. You have to clear them out
   manually.
 
-## TODO
+## Config file
 
-- Look for a file `$basedir/wmk_config.yaml` containing configuration variables.
-  This would affect things such as markdown processing extensions, http port and
-  additional template context variables.
+A config file, `$basedir/wmk_config.yaml`, can be used to configure some aspects
+of how `wmk` operates. Currently there is support for the following three
+settings:
+
+- `template_context`: Default values for the context passed to Mako templates.
+  This should be a dict. The values may be overridden by markdown metadata or
+  linked YAML files.
+
+- `markdown_extensions`: A list of [extensions][ext] to enable for markdown
+  processing by Python-Markdown. The default is `['extra', 'sane_lists']`.
+  If you specify [third-party extensions][other] here, you have to install them
+  into the Python virtual environment first.
+
+- `sass_output_style`: The output style for Sass/SCSS rendering. This should be
+  one of `compact`, `compressed`, `expanded` or `nested`. The default is
+  `expanded`.
+
+[ext]: https://python-markdown.github.io/extensions/
+[other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions

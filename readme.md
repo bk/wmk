@@ -1,19 +1,96 @@
-# MK static site generator
+# wmk – a simple static site generator
 
-## Running process_pages.py
+## Getting ready
 
-1. Mako templates (in `templates/`) are loaded and any templates ending with the extension `.mhtml` and NOT starting with an underscore or containing `base` in the filename are processed into html and written into the output directory (`htdocs/`) at the corresponding location and under the same file names (except that `.mhtml` is of course changed into `.html`).
+After cloning this repo into your chosen location (`$myrepo`), install the
+necessary Python modules into a virtual environment:
 
-2. Markdown content in `content/` is loaded and rendered to the corresponding place in `htdocs/` using the template specified in the metadata section of the file (`md_base.mhtml` being the default template). The HTML produced by converting the markdown source is in the `CONTENT` template variable.
+```
+cd $myrepo
+python3 -m venv venv
+. venv/bin/activate
+pip install -r requirements.txt
+```
 
-3. Any static files in `static/` are rsynced into `htdocs/`. Note that you should be careful not to overwrite files produced by the previous two steps.
+After that, either put `$myrepo/bin` into your `$PATH` or create a symlink from
+somewhere in your `$PATH` to `$myrepo/bin/wmk`.
 
-4. The asset pipeline is run. Currently this only compiles `.scss` files into CSS and places the result in `htdocs/css/`.
+Required software (aside from Python 3):
 
-## Metadata in Markdown files
+- `rsync` (for static file copying).
+- For `wmk watch` functionality, you need to be on Linux and have `inotifywait`
+  installed.
 
-Currently there are only two special variables in the metadata section:
+## Usage
 
-- `template`: Filename of Mako template from `templates/` directory. The default is `md_base.mhtml`.
+The `wmk` command structure is `wmk <action> <base_directory>`. The base
+directory is of course the directory containing the source files in
+subdirectories such as `templates`, `content`, etc.  See below for details on
+file organization.
 
-- `pretty_path`: If this is false, the output filename in `htdocs/` will be the same as the path of the source inside `content/` except with an extension of `.html` instead of `.md`. If it is true, the output path will consist of the input except that the extension `.md` is replaced with `/index.html` (i.e. the file basename is turned into a directory name). The default value is true.
+- `wmk info $basedir`: Shows the real path to the location of `wmk.py` and of
+  the content base directory. E.g. `wmk info .`.
+
+- `wmk run $basedir`: Compiles/copies files into `$basedir/htdocs`.
+
+- `wmk watch $basedir`: Watches for changes in the source directories inside
+  `$basedir` and recompiles if changes are detected.
+
+- `wmk serve $basedir`: Serves the files in `$basedir/htdocs` on
+  `http://localhost:7007/`.
+
+## File organization
+
+Inside a given working directory, `wmk` assumes the following subdirectories for
+content and output. They will be created if they do not exist:
+
+- `htdocs`: The output directory. Rendered, processed or copied content is
+  placed here, and `wmk serve` will serve files from this directory.
+
+- `templates`: Mako templates. Templates with the extension `.mhtml` are
+  rendered directly into `htdocs` as `.html` files, unless their filename starts
+  with a dot or underscore or ends with `base.mhtml`.
+
+- `content`: Markdown content with YAML metadata. This will be rendered into
+  html using the `template` specified in the metadata or `md_base.mhtml` by
+  default. The target filename will be `index.html` in a directory corresponding
+  to the basename of the markdown file, unless `pretty_path` in the metadata is
+  `false` (in which case only the extension is replaced). The converted content
+  will be passed to the Mako template as the context variable `CONTENT`, along
+  with other metadata. A YAML datasource can be specified in the metadata block
+  as `LOAD`; the data in this file will be added to the context.
+
+- `data`: YAML files for additional metadata.
+
+- `assets`: Assets for an asset pipeline. Currently this only handles SCSS/Sass
+  files in the subdirectory `scss`. They will be compiled to CSS which is placed
+  in the target directory `htdocs/css`.
+
+- `static`: Static files. Everything in here will be rsynced directoy over to
+  `htdocs`.
+
+## Notes
+
+* The order of operations is as follows:
+
+  1. Copy files from `static/`.
+  2. Run asset pipeline.
+  3. Render Mako templates from `templates`.
+  4. Render Markdown content from `content`.
+
+  Note that later steps may overwrite files placed by earlier steps.
+
+* `wmk.py` uses timestamps to prevent unnecessary re-rendering of templates,
+  markdown files and scss sources. The check is rather primitive so it may be
+  necessary to touch the main source file or remove files from `htdocs` in order
+  to trigger a refresh.
+
+* If files are removed from source directories the corresponding files in
+  `htdocs` will not disappear automatically. You have to clear them out
+  manually.
+
+## TODO
+
+- Look for a file `$basedir/wmk_config.yaml` containing configuration variables.
+  This would affect things such as markdown processing extensions, http port and
+  additional template context variables.

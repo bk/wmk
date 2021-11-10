@@ -1,27 +1,10 @@
 #!/bin/bash
 
-my_dir() {
-    # Make sure that we resolve our location even if we're
-    # being called through as symlink
-    src="${BASH_SOURCE[0]}"
-    while [ -h "$src" ]; do
-        trg="$(readlink "$src")"
-        if [[ $trg == /* ]]; then
-            # $scr is an absolute symlink to $trg
-            src="$trg"
-        else
-            # $src is a relative symlink to $trg (relative to $dir)
-            dir="$(dirname "$src")"
-            src="$dir/$trg"
-        fi
-    done
-    echo $(dirname "$src")
-}
-
 # Assumes that this script is in bin/ inside the wmk repository and that the
 # python virtual environment is in $wmk_home/venv
 
-SCRIPT_HOME=$(my_dir)
+SCRIPT_PATH=$(realpath "$0")
+SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
 ACTION="$1"
 BASEDIR="$2"

@@ -1,9 +1,20 @@
-# wmk – a simple static site generator
+# wmk
+
+This is a simple static site generator written in Python with the following
+features:
+
+- Markdown content with YAML metadata.
+- Additional data may be loaded from separate YAML files.
+- The content is rendered using [Mako][mako] templates.
+- Stand-alone templates are also rendered if present.
+- Sass/SCSS support.
+
+[mako]: https://www.makotemplates.org/
 
 ## Getting ready
 
-After cloning this repo into your chosen location (`$myrepo`), install the
-necessary Python modules into a virtual environment:
+Clone this repo into your chosen location (`$myrepo`) and install the necessary
+Python modules into a virtual environment:
 
 ```
 cd $myrepo
@@ -15,11 +26,11 @@ pip install -r requirements.txt
 After that, either put `$myrepo/bin` into your `$PATH` or create a symlink from
 somewhere in your `$PATH` to `$myrepo/bin/wmk`.
 
-Required software (aside from Python 3):
+Required software (aside from Python, of course):
 
 - `rsync` (for static file copying).
-- For `wmk watch` functionality, you need to be on Linux and have `inotifywait`
-  installed.
+- For `wmk watch` functionality, you need to be using Linux and have
+  `inotifywait` installed.
 
 ## Usage
 

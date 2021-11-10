@@ -18,12 +18,12 @@ then
             python3 -m http.server 7007 --bind 127.0.0.1 --directory "$BASEDIR/htdocs"
             ;;
         r|b|run|build)
-            $WMK_HOME/process_pages.py "$BASEDIR"
+            $WMK_HOME/wmk.py "$BASEDIR"
             ;;
         w|watch)
             cd "$BASEDIR"
             while true; do
-                $WMK_HOME/process_pages.py "$BASEDIR"
+                $WMK_HOME/wmk.py "$BASEDIR"
                 inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r assets data content static templates
                 sleep 1
             done

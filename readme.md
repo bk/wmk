@@ -8,6 +8,7 @@ features:
 - The content is rendered using [Mako][mako] templates.
 - Stand-alone templates are also rendered if present.
 - Sass/SCSS support.
+- Configurable shortcodes.
 
 [mako]: https://www.makotemplates.org/
 
@@ -67,9 +68,10 @@ content and output. They will be created if they do not exist:
   default. The target filename will be `index.html` in a directory corresponding
   to the basename of the markdown file, unless `pretty_path` in the metadata is
   `false` (in which case only the extension is replaced). The converted content
-  will be passed to the Mako template as the context variable `CONTENT`, along
-  with other metadata. A YAML datasource can be specified in the metadata block
-  as `LOAD`; the data in this file will be added to the context.
+  will be passed to the Mako template as a string in the context variable
+  `CONTENT`, along with other metadata. A YAML datasource can be specified in
+  the metadata block as `LOAD`; the data in this file will be added to the
+  context.
 
 - `data`: YAML files for additional metadata.
 
@@ -103,12 +105,19 @@ content and output. They will be created if they do not exist:
 ## Config file
 
 A config file, `$basedir/wmk_config.yaml`, can be used to configure some aspects
-of how `wmk` operates. Currently there is support for the following three
-settings:
+of how `wmk` operates. Currently there is support for the following settings:
 
 - `template_context`: Default values for the context passed to Mako templates.
   This should be a dict. The values may be overridden by markdown metadata or
   linked YAML files.
+
+- `shortcodes`: A way to easily embed content such as YouTube videos os Github
+  gists into your Markdown. See further below.
+
+- `render_drafts`: Normally, markdown files with `draft` set to a true value in
+  the metadata section will be skipped during rendering. This can be turned off
+  (so that the `draft` status flag is ignored) by setting `render_drafts` to True
+  in the config file.
 
 - `markdown_extensions`: A list of [extensions][ext] to enable for markdown
   processing by Python-Markdown. The default is `['extra', 'sane_lists']`.
@@ -121,3 +130,46 @@ settings:
 
 [ext]: https://python-markdown.github.io/extensions/
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions
+
+## Shortcodes
+
+A shortcode consists of an opening tag, `{{<`, followed by any number of spaces,
+followed by a string representing the "short version" of the content, followed
+by any number of spaces and the closing tag `>}}`. It should stay on one line.
+Here is an example:
+
+```
+{{< youtube p118YbxFtGg >}}
+```
+
+The value of the `shortcodes` section of the config file should be a dict where
+the key is an identifier for the type of shortcode and the value should be a
+dict with two keys, `pattern` and `content`. The pattern is a regular expression
+and the content is substituted for the string which the regular expression
+matches. Here is a working example:
+
+```yaml
+shortcodes:
+  youtube:
+    pattern: youtube (\S+)
+    content: >-
+      <div class="video-container"><iframe
+      width="560" height="315"
+      src="https://www.youtube.com/embed/\g<1>"
+      title="YouTube video player" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen></iframe></div>
+```
+
+When applied to the above shortcode, this results in
+
+```html
+<div class="video-container"><iframe width="560" height="315" src="https://www.youtube.com/embed/p118YbxFtGg" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
+```
+
+Shortcodes are applied **before** the Markdown document is converted to HTML, so
+it is possible to replace a shortcode with Markdown content which will then be
+processed normally.
+
+Currently no default shortcodes are provided. In order to use them, they must be
+added to `wmk_config.yaml`.

@@ -3,6 +3,7 @@
 import os
 import sys
 import datetime
+import re
 
 import sass
 import yaml
@@ -41,7 +42,7 @@ def main(basedir=None):
     process_templates(templates, lookup, template_vars)
     # 4) render Markdown content
     content = get_content(
-        dirs['content'], dirs['data'], dirs['output'], template_vars)
+        dirs['content'], dirs['data'], dirs['output'], template_vars, conf)
     process_markdown_content(content, lookup, conf)
 
 
@@ -126,7 +127,7 @@ def process_assets(assetdir, outputdir, conf):
         print('[%s] - sass: refresh' % datetime.datetime.now())
 
 
-def get_content(ctdir, datadir, outputdir, template_vars):
+def get_content(ctdir, datadir, outputdir, template_vars, conf):
     """
     Get those markdown files that need processing.
     """
@@ -142,24 +143,33 @@ def get_content(ctdir, datadir, outputdir, template_vars):
             source_file = os.path.join(root, fn)
             with open(source_file) as f:
                 meta, doc = frontmatter.parse(f.read())
-            meta.update(template_vars)
-            template = meta.get('template', default_template)
-            pretty_path = meta.get('pretty_path', default_pretty_path)
-            if 'LOAD' in meta:
-                load_path = os.path.join(datadir, meta['LOAD'])
+            if meta.get('draft', False) and not conf.get('render_drafts', False):
+                continue
+            data = {}
+            data.update(template_vars)
+            data.update(meta)
+            template = data.get('template', default_template)
+            pretty_path = data.get('pretty_path', default_pretty_path)
+            if 'LOAD' in data:
+                load_path = os.path.join(datadir, data['LOAD'])
                 if os.path.exists(load_path):
                     loaded = {}
                     with open(load_path) as yf:
                         loaded = yaml.safe_load(yf) or {}
-                    meta.update(loaded)
+                    data.update(loaded)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)
+            if conf.get('shortcodes', None):
+                for k in conf['shortcodes']:
+                    sc = conf['shortcodes'][k]
+                    pat = r'{{< *' + sc['pattern'] + r' *>}}'
+                    doc = re.sub(pat, sc['content'], doc)
             content.append({
                 'source_file': source_file,
                 'source_file_short': source_file.replace(ctdir, '', 1),
                 'target': os.path.join(html_dir, html_fn),
                 'template': template,
-                'data': meta,
+                'data': data,
                 'doc': doc,
             })
     return content

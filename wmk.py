@@ -27,9 +27,11 @@ def main(basedir=None):
     ensure_dirs(dirs)
     conf = get_config(basedir)
     # 1) copy static files
+    # css_dir_from_start is workaround for process_assets timestamp check
+    css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
     os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
     # 2) compile assets (only scss for now):
-    process_assets(dirs['assets'], dirs['output'], conf)
+    process_assets(dirs['assets'], dirs['output'], conf, css_dir_from_start)
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
@@ -130,7 +132,7 @@ def process_markdown_content(content, lookup, conf):
             str(datetime.datetime.now()), ct['source_file']))
 
 
-def process_assets(assetdir, outputdir, conf):
+def process_assets(assetdir, outputdir, conf, css_dir_from_start):
     """
     Compiles assets from assetdir into outputdir.
     Only handles sass/scss files in the sass subdirectory for now.
@@ -141,7 +143,7 @@ def process_assets(assetdir, outputdir, conf):
     css_output = os.path.join(outputdir, 'css')
     if not os.path.exists(css_output):
         os.mkdir(css_output)
-    if not dir_is_older_than(scss_input, css_output):
+    if not css_dir_from_start or not dir_is_older_than(scss_input, css_output):
         output_style = conf.get('sass_output_style', 'expanded')
         sass.compile(
             dirname=(scss_input, css_output), output_style=output_style)
@@ -273,14 +275,18 @@ def mako_shortcode(comp, ctx):
         argstr = match.group(2)
         directive = match.group(3) or ''
         args, kwargs = parse_argstr(argstr)
-        subcomp = comp.get_def(defnam)
-        if directive in ('with_context', 'ctx'):
-            ckwargs = {}
-            ckwargs.update(ctx)
-            ckwargs.update(kwargs)
-            return subcomp.render(*args, **ckwargs)
-        else:
-            return subcomp.render(*args, **kwargs)
+        try:
+            subcomp = comp.get_def(defnam)
+            if directive in ('with_context', 'ctx'):
+                ckwargs = {}
+                ckwargs.update(ctx)
+                ckwargs.update(kwargs)
+                return subcomp.render(*args, **ckwargs)
+            else:
+                return subcomp.render(*args, **kwargs)
+        except Exception as e:
+            print("WARNING: shortcode {} failed: {}".format(defnam, e))
+            return match.group(0)
     return replacer
 
 

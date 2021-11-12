@@ -17,7 +17,7 @@ features:
 Clone this repo into your chosen location (`$myrepo`) and install the necessary
 Python modules into a virtual environment:
 
-```
+```shell
 cd $myrepo
 python3 -m venv venv
 . venv/bin/activate
@@ -112,11 +112,7 @@ of how `wmk` operates. Currently there is support for the following settings:
   linked YAML files.
 
 - `shortcodes` and `mako_shortcodes`: A way to mix complicated or dynamic
-  content into Markdown with minimal effort. A typical use case is to easily
-  embed content such as YouTube videos os Github gists into your Markdown. More
-  advanced possibilities include formatting a table containing data from a CSV
-  or sqlite file or even generating a series of linked HTML files based on such
-  data.
+  content into Markdown with minimal effort. See further defails below.
 
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -132,6 +128,10 @@ of how `wmk` operates. Currently there is support for the following settings:
   one of `compact`, `compressed`, `expanded` or `nested`. The default is
   `expanded`.
 
+- `http`: This is is a dict for configuring the address used for `wmk serve`.
+  It may contain either or both of two keys: `port` (default: 7007) and `ip`
+  (default: 127.0.0.1).
+
 [ext]: https://python-markdown.github.io/extensions/
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions
 
@@ -141,22 +141,26 @@ A shortcode consists of an opening tag, `{{<`, followed by any number of spaces,
 followed by a string representing the "short version" of the content, followed
 by any number of spaces and the closing tag `>}}`. It should stay on one line.
 
+A typical use case is to easily embed content from external sites into your
+Markdown. More advanced possibilities include formatting a table containing data
+from a CSV file or generating a cropped and scaled thumbnail image.
+
 There are two types of shortcodes: (1) regex-based shortcodes, defined directly
 in `wmk_config.yaml`; and (2) shortcodes defined in a specified Mako template.
 
 ### Regex-based shortcodes
 
-Here is an example of a simple regex-based shortcode:
+Here is an example of a simple regex-based shortcode for easily embedding
+YouTube videos:
 
-```
+```markdown
 {{< youtube p118YbxFtGg >}}
 ```
 
 The value of the `shortcodes` section of the config file should be a dict where
 the key is an identifier for the type of shortcode and the value should be a
 dict with two keys, `pattern` and `content`. The pattern is a regular expression
-and the content is substituted for the string which the regular expression
-matches. Here is a working example:
+and the content is substituted for the shortcode string. Here is a working example:
 
 ```yaml
 shortcodes:
@@ -178,12 +182,12 @@ inside the `templates` directory. The name of the component is specified in the
 `wmk_config.yaml` file like this:
 
 ```yaml
-mako_shortcodes: shortcodes.mc
+mako_shortcodes: utils/shortcodes.mc
 ```
 
 The shortcode itself looks like a function call along with an optional
 single-word directive after the closing parenthesis. Currently only one
-directive is supported: `with_context` (or `ctx` for short). Without this
+such directive is supported: `with_context` (or `ctx` for short). Without this
 directive, the template def only receives the arguments that are directly
 specified in the shortcode. With the directive, however, the context (i.e.
 global template variables along with whatever is defined in the metadata block)
@@ -191,11 +195,12 @@ associated with the Markdown file containing the shortcode call is added to the
 function keyword arguments when the template def is rendered. Here is an example
 of a Mako-based shortcode call:
 
-```
+```markdown
 {{< csv_table('expenses_2021.csv') with_context >}}
 ```
 
-Here is an example `shortcodes.mc` Mako component implementing `csv_table()`:
+Here is an example `shortcodes.mc` Mako component implementing a `csv_table()`
+that might handle the above shortcode call:
 
 ```mako
 <%! import os, csv %>

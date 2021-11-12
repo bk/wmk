@@ -4,6 +4,7 @@ import os
 import sys
 import datetime
 import re
+import ast
 
 import sass
 import yaml
@@ -92,16 +93,36 @@ def process_markdown_content(content, lookup, conf):
     """
     Renders the specified markdown content into the outputdir.
     """
+    try:
+        mako_shortcode_comp = conf.get('mako_shortcodes', None)
+        if mako_shortcode_comp:
+            mako_shortcode_comp = lookup.get_template(mako_shortcode_comp)
+    except Exception as e:
+        print("WARNING: Could not load shortcodes from {}: {}".format(
+            conf['mako_shortcodes'], e))
+        mako_shortcode_comp = None
     for ct in content:
         if is_older_than(ct['source_file'], ct['target']):
             continue
         template = lookup.get_template(ct['template'])
         maybe_mkdir(ct['target'])
         data = ct['data']
+        doc = ct['doc']
+        if '{{<' in doc:
+            if conf.get('shortcodes', None):
+                for k in conf['shortcodes']:
+                    sc = conf['shortcodes'][k]
+                    pat = r'{{< *' + sc['pattern'] + r' *>}}'
+                    doc = re.sub(pat, sc['content'], doc)
+            if mako_shortcode_comp:
+                # funcname, argstring, directive
+                pat = r'{{< *(\w+)\( *(.*?) *\) *(\w+)? *>}}'
+                handler = mako_shortcode(mako_shortcode_comp, data)
+                doc = re.sub(pat, handler, doc)
         extensions = conf.get('markdown_extensions', None)
         if extensions is None:
             extensions = ['extra', 'sane_lists']
-        data['CONTENT'] = markdown.markdown(ct['doc'], extensions=extensions)
+        data['CONTENT'] = markdown.markdown(doc, extensions=extensions)
         data['RAW_CONTENT'] = ct['doc']
         with open(ct['target'], 'w') as f:
             f.write(template.render(**data))
@@ -159,11 +180,6 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                     data.update(loaded)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)
-            if conf.get('shortcodes', None):
-                for k in conf['shortcodes']:
-                    sc = conf['shortcodes'][k]
-                    pat = r'{{< *' + sc['pattern'] + r' *>}}'
-                    doc = re.sub(pat, sc['content'], doc)
             content.append({
                 'source_file': source_file,
                 'source_file_short': source_file.replace(ctdir, '', 1),
@@ -238,6 +254,34 @@ def get_newest_ts_of_dir(src):
             if ts > newest:
                 newest = ts
     return newest
+
+
+def parse_argstr(argstr):
+    "Parse a string representing the arguments part of a function call."
+    fake = 'f({})'.format(argstr)
+    tree = ast.parse(fake)
+    funccall = tree.body[0].value
+    args = [ast.literal_eval(arg) for arg in funccall.args]
+    kwargs = {arg.arg: ast.literal_eval(arg.value) for arg in funccall.keywords}
+    return args, kwargs
+
+
+def mako_shortcode(comp, ctx):
+    "Return a match replacement function for mako shortcode handling."
+    def replacer(match):
+        defnam = match.group(1)
+        argstr = match.group(2)
+        directive = match.group(3) or ''
+        args, kwargs = parse_argstr(argstr)
+        subcomp = comp.get_def(defnam)
+        if directive in ('with_context', 'ctx'):
+            ckwargs = {}
+            ckwargs.update(ctx)
+            ckwargs.update(kwargs)
+            return subcomp.render(*args, **ckwargs)
+        else:
+            return subcomp.render(*args, **kwargs)
+    return replacer
 
 
 if __name__ == '__main__':

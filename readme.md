@@ -111,8 +111,12 @@ of how `wmk` operates. Currently there is support for the following settings:
   This should be a dict. The values may be overridden by markdown metadata or
   linked YAML files.
 
-- `shortcodes`: A way to easily embed content such as YouTube videos os Github
-  gists into your Markdown. See further below.
+- `shortcodes` and `mako_shortcodes`: A way to mix complicated or dynamic
+  content into Markdown with minimal effort. A typical use case is to easily
+  embed content such as YouTube videos os Github gists into your Markdown. More
+  advanced possibilities include formatting a table containing data from a CSV
+  or sqlite file or even generating a series of linked HTML files based on such
+  data.
 
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -136,7 +140,13 @@ of how `wmk` operates. Currently there is support for the following settings:
 A shortcode consists of an opening tag, `{{<`, followed by any number of spaces,
 followed by a string representing the "short version" of the content, followed
 by any number of spaces and the closing tag `>}}`. It should stay on one line.
-Here is an example:
+
+There are two types of shortcodes: (1) regex-based shortcodes, defined directly
+in `wmk_config.yaml`; and (2) shortcodes defined in a specified Mako template.
+
+### Regex-based shortcodes
+
+Here is an example of a simple regex-based shortcode:
 
 ```
 {{< youtube p118YbxFtGg >}}
@@ -161,15 +171,79 @@ shortcodes:
       allowfullscreen></iframe></div>
 ```
 
-When applied to the above shortcode, this results in
+### Mako-based shortcodes
 
-```html
-<div class="video-container"><iframe width="560" height="315" src="https://www.youtube.com/embed/p118YbxFtGg" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
+Mako-based shortcodes are implemented as `<%def>` blocks in a Mako component
+inside the `templates` directory. The name of the component is specified in the
+`wmk_config.yaml` file like this:
+
+```yaml
+mako_shortcodes: shortcodes.mc
 ```
+
+The shortcode itself looks like a function call along with an optional
+single-word directive after the closing parenthesis. Currently only one
+directive is supported: `with_context` (or `ctx` for short). Without this
+directive, the template def only receives the arguments that are directly
+specified in the shortcode. With the directive, however, the context (i.e.
+global template variables along with whatever is defined in the metadata block)
+associated with the Markdown file containing the shortcode call is added to the
+function keyword arguments when the template def is rendered. Here is an example
+of a Mako-based shortcode call:
+
+```
+{{< csv_table('expenses_2021.csv') with_context >}}
+```
+
+Here is an example `shortcodes.mc` Mako component implementing `csv_table()`:
+
+```mako
+<%! import os, csv %>
+
+<%def name="csv_table(cvsfile, delimiter=',', caption=None, **kwargs)">
+<%
+info = []
+with open(os.path.join(kwargs['DATADIR'], cvsfile)) as f:
+    info = list(csv.DictReader(f, delimiter=delimiter))
+if not info:
+    return ''
+keys = info[0].keys()
+%>
+<table class="csv-table">
+  % if caption:
+    <caption>${ caption }</caption>
+  % endif
+  <thead>
+    <tr>
+      % for k in keys:
+        <th>${ k }</th>
+      % endfor
+    </tr>
+  </thead>
+  <tbody>
+    % for row in info:
+      <tr>
+        % for k in keys:
+          <td>${ row[k] }</td>
+        % endfor
+      </tr>
+    % endfor
+  </tbody>
+</table>
+</%def>
+```
+
+Note that because we need to use a context variable (`DATADIR`), the shortcode
+call includes the `with_context` directive, and for the same reason the Mako def
+appends `**kwargs` to its list of arguments.
+
+### Notes
 
 Shortcodes are applied **before** the Markdown document is converted to HTML, so
 it is possible to replace a shortcode with Markdown content which will then be
 processed normally.
 
+Mako-based shortcodes are applied before regex-based shortcodes.
+
 Currently no default shortcodes are provided. In order to use them, they must be
-added to `wmk_config.yaml`.
+configured in `wmk_config.yaml`.

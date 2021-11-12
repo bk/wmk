@@ -8,14 +8,26 @@ SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
 ACTION="$1"
 BASEDIR="$2"
+WMK_CONF="$BASEDIR/wmk_config.yaml"
 
 . $WMK_HOME/venv/bin/activate
+
+wmk_http_conf(){
+    if test -f "$WMK_CONF"
+    then
+        python3 -c "import yaml;c=yaml.safe_load(open('$WMK_CONF'));print(c.get('http',{}).get('$1','$2'));"
+    else
+        echo $2
+    fi
+}
 
 if test -d "$BASEDIR"
 then
     case "$ACTION" in
         s|srv|serve)
-            python3 -m http.server 7007 --bind 127.0.0.1 --directory "$BASEDIR/htdocs"
+            IP=$(wmk_http_conf ip 127.0.0.1)
+            PORT=$(wmk_http_conf port 7007)
+            python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/htdocs"
             ;;
         r|b|run|build)
             $WMK_HOME/wmk.py "$BASEDIR"

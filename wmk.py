@@ -182,10 +182,12 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                     data.update(loaded)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)
+            target_fn = os.path.join(html_dir, html_fn)
+            data['SELF_URL'] = target_fn.replace(outputdir, '', 1)
             content.append({
                 'source_file': source_file,
                 'source_file_short': source_file.replace(ctdir, '', 1),
-                'target': os.path.join(html_dir, html_fn),
+                'target': target_fn,
                 'template': template,
                 'data': data,
                 'doc': doc,
@@ -221,7 +223,7 @@ def get_templates(tpldir, outputdir):
 def maybe_mkdir(fn):
     dirname = os.path.dirname(fn)
     if not os.path.isdir(dirname):
-        os.mkdir(dirname)
+        os.makedirs(dirname)
 
 
 def ensure_dirs(dirs):

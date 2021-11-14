@@ -41,15 +41,23 @@ subdirectories such as `templates`, `content`, etc.  See below for details on
 file organization.
 
 - `wmk info $basedir`: Shows the real path to the location of `wmk.py` and of
-  the content base directory. E.g. `wmk info .`.
+  the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
+  and `debug`.
 
-- `wmk run $basedir`: Compiles/copies files into `$basedir/htdocs`.
+- `wmk run $basedir [-f|--force]`: Compiles/copies files into `$basedir/htdocs`.
+  If `-f` or `--force` is specified as the third argument, no timestamp checking
+  is done, resulting in all files being re-processed. Synonyms for `run` are
+  `build`, `b` and `r`.
 
-- `wmk watch $basedir`: Watches for changes in the source directories inside
-  `$basedir` and recompiles if changes are detected.
+- `wmk watch $basedir [-f|--force]`: Watches for changes in the source
+  directories inside `$basedir` and recompiles if changes are detected.  If `-f`
+  or `--force` is specified as the third argument, no timestamp checking is done
+  whenever a potential change triggers a rerun of `wmk run`, thus ensuring that
+  all files will be re-processed. A synonym for `watch` is `w`.
 
 - `wmk serve $basedir`: Serves the files in `$basedir/htdocs` on
-  `http://localhost:7007/`.
+  `http://localhost:7007/` (the IP and port are configurable via
+  `wmk_config.yaml` – see below). Synonyms for `serve` are `srv` and `s`.
 
 ## File organization
 
@@ -93,10 +101,12 @@ content and output. They will be created if they do not exist:
 
   Note that later steps may overwrite files placed by earlier steps.
 
-* `wmk.py` uses timestamps to prevent unnecessary re-rendering of templates,
-  markdown files and scss sources. The check is rather primitive so it may be
-  necessary to touch the main source file or remove files from `htdocs` in order
-  to trigger a refresh.
+* For the `run` and `watch` actions, `wmk.py` uses timestamps to prevent
+  unnecessary re-rendering of templates, markdown files and scss sources. The
+  check is rather primitive so it may be necessary to touch the main source file
+  or remove files from `htdocs` in order to trigger a refresh. To force a
+  rebuild of all files, one can also use the `--force` (or `-f`) switch as
+  an extra argument.
 
 * If files are removed from source directories the corresponding files in
   `htdocs` will not disappear automatically. You have to clear them out

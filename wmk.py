@@ -15,7 +15,7 @@ from mako.template import Template
 from mako.lookup import TemplateLookup
 
 
-def main(basedir=None):
+def main(basedir=None, force=False):
     """
     Builds/copies everything into the output dir (htdocs).
     """
@@ -31,7 +31,8 @@ def main(basedir=None):
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
     os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
     # 2) compile assets (only scss for now):
-    process_assets(dirs['assets'], dirs['output'], conf, css_dir_from_start)
+    process_assets(
+        dirs['assets'], dirs['output'], conf, css_dir_from_start, force)
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
@@ -42,11 +43,12 @@ def main(basedir=None):
     # 3) render templates
     lookup = TemplateLookup(directories=[dirs['templates']])
     templates = get_templates(dirs['templates'], dirs['output'])
-    process_templates(templates, lookup, template_vars)
+    process_templates(templates, lookup, template_vars, force)
     # 4) render Markdown content
     content = get_content(
-        dirs['content'], dirs['data'], dirs['output'], template_vars, conf)
-    process_markdown_content(content, lookup, conf)
+        dirs['content'], dirs['data'], dirs['output'],
+        template_vars, conf)
+    process_markdown_content(content, lookup, conf, force)
 
 
 def get_dirs(basedir):
@@ -72,13 +74,13 @@ def get_config(basedir):
     return conf
 
 
-def process_templates(templates, lookup, template_vars):
+def process_templates(templates, lookup, template_vars, force):
     """
     Renders the specified templates into the outputdir.
     """
     for tpl in templates:
         # NOTE: very crude, not affected by template dependencies
-        if is_older_than(tpl['src_path'], tpl['target']):
+        if not force and is_older_than(tpl['src_path'], tpl['target']):
             continue
         template = lookup.get_template(tpl['src'])
         #data = get_data(tpl['data'], datadir=datadir)
@@ -91,7 +93,7 @@ def process_templates(templates, lookup, template_vars):
             str(datetime.datetime.now()), tpl['src']))
 
 
-def process_markdown_content(content, lookup, conf):
+def process_markdown_content(content, lookup, conf, force):
     """
     Renders the specified markdown content into the outputdir.
     """
@@ -104,7 +106,7 @@ def process_markdown_content(content, lookup, conf):
             conf['mako_shortcodes'], e))
         mako_shortcode_comp = None
     for ct in content:
-        if is_older_than(ct['source_file'], ct['target']):
+        if not force and is_older_than(ct['source_file'], ct['target']):
             continue
         template = lookup.get_template(ct['template'])
         maybe_mkdir(ct['target'])
@@ -132,7 +134,7 @@ def process_markdown_content(content, lookup, conf):
             str(datetime.datetime.now()), ct['source_file']))
 
 
-def process_assets(assetdir, outputdir, conf, css_dir_from_start):
+def process_assets(assetdir, outputdir, conf, css_dir_from_start, force):
     """
     Compiles assets from assetdir into outputdir.
     Only handles sass/scss files in the sass subdirectory for now.
@@ -143,7 +145,7 @@ def process_assets(assetdir, outputdir, conf, css_dir_from_start):
     css_output = os.path.join(outputdir, 'css')
     if not os.path.exists(css_output):
         os.mkdir(css_output)
-    if not css_dir_from_start or not dir_is_older_than(scss_input, css_output):
+    if force or not css_dir_from_start or not dir_is_older_than(scss_input, css_output):
         output_style = conf.get('sass_output_style', 'expanded')
         sass.compile(
             dirname=(scss_input, css_output), output_style=output_style)
@@ -294,4 +296,5 @@ def mako_shortcode(comp, ctx):
 
 if __name__ == '__main__':
     basedir = sys.argv[1] if len(sys.argv) > 1 else None
-    main(basedir)
+    force = True if len(sys.argv) > 2 and sys.argv[2] in ('-f', '--force') else False
+    main(basedir, force)

@@ -8,9 +8,19 @@ SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
 ACTION="$1"
 BASEDIR="$2"
+FORCE="$3"
 WMK_CONF="$BASEDIR/wmk_config.yaml"
 
 . $WMK_HOME/venv/bin/activate
+
+case "$FORCE" in
+    -f|--force)
+        FORCE=--force
+        ;;
+    *)
+        FORCE=""
+        ;;
+esac
 
 wmk_http_conf(){
     if test -f "$WMK_CONF"
@@ -30,12 +40,12 @@ then
             python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/htdocs"
             ;;
         r|b|run|build)
-            $WMK_HOME/wmk.py "$BASEDIR"
+            $WMK_HOME/wmk.py "$BASEDIR" "$FORCE"
             ;;
         w|watch)
             cd "$BASEDIR"
             while true; do
-                $WMK_HOME/wmk.py "$BASEDIR"
+                $WMK_HOME/wmk.py "$BASEDIR" "$FORCE"
                 inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r assets data content static templates
                 sleep 1
             done
@@ -46,13 +56,13 @@ then
             echo "  - work directory: $(realpath "$BASEDIR")"
             ;;
         *)
-            echo "Usage: wmk serve|run|watch|info dirname"
+            echo "Usage: wmk serve|run|watch|info dirname [-f|--force]"
             echo "See $WMK_HOME/readme.md for documentation"
             exit 1
             ;;
     esac
 else
-    echo "Usage: wmk serve|run|watch|info dirname"
+    echo "Usage: wmk serve|run|watch|info dirname [-f|--force]"
     # echo "Need a basedir as second argument"
     echo "See $WMK_HOME/readme.md for documentation"
     exit 1

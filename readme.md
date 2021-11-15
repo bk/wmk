@@ -68,9 +68,11 @@ content and output. They will be created if they do not exist:
   placed here, and `wmk serve` will serve files from this directory.
 
 - `templates`: Mako templates. Templates with the extension `.mhtml` are
-  rendered directly into `htdocs` as `.html` files, unless their filename starts
-  with a dot or underscore or contains the string `base`, or if they are inside
-  a subdirectory names `base`. For details on context variables received by such
+  rendered directly into `htdocs` as `.html` files (or another extension if the
+  filename ends with `.$ext\.mhtml`, where `$ext` is a string consisting of 2-4
+  alphanumeric characters), unless their filename starts with a dot or
+  underscore or contains the string `base`, or if they are directly inside a
+  subdirectory named `base`. For details on context variables received by such
   stand-alone templates, see below.
 
 - `content`: Markdown content with YAML metadata. This will be rendered into

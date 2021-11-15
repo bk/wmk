@@ -243,7 +243,11 @@ def get_templates(tpldir, outputdir, template_vars):
                 source = os.path.join(root.replace(tpldir, '', 1), fn)
                 if source.startswith('/'):
                     source = source[1:]
-                html_fn = fn.replace('.mhtml', '.html')
+                # Keep an extra extension before .mhtml (e.g. "atom.xml.mhtml")
+                if re.search(r'\.\w{2,4}\.mhtml$', fn):
+                    html_fn = fn.replace('.mhtml', '')
+                else:
+                    html_fn = fn.replace('.mhtml', '.html')
                 html_dir = root.replace(tpldir, outputdir, 1)
                 target = os.path.join(html_dir, html_fn)
                 templates.append({

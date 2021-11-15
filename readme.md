@@ -69,17 +69,20 @@ content and output. They will be created if they do not exist:
 
 - `templates`: Mako templates. Templates with the extension `.mhtml` are
   rendered directly into `htdocs` as `.html` files, unless their filename starts
-  with a dot or underscore or ends with `base.mhtml`.
+  with a dot or underscore or contains the string `base`, or if they are inside
+  a subdirectory names `base`. For details on context variables received by such
+  stand-alone templates, see below.
 
 - `content`: Markdown content with YAML metadata. This will be rendered into
   html using the `template` specified in the metadata or `md_base.mhtml` by
   default. The target filename will be `index.html` in a directory corresponding
   to the basename of the markdown file, unless `pretty_path` in the metadata is
-  `false` (in which case only the extension is replaced). The converted content
-  will be passed to the Mako template as a string in the context variable
-  `CONTENT`, along with other metadata. A YAML datasource can be specified in
-  the metadata block as `LOAD`; the data in this file will be added to the
-  context.
+  `false` or the name of the Markdown file itself is `index.md` (in which case
+  only the extension is replaced). The converted content will be passed to the
+  Mako template as a string in the context variable `CONTENT`, along with other
+  metadata. A YAML datasource can be specified in the metadata block as `LOAD`;
+  the data in this file will be added to the context. For further details on the
+  context variables, see below.
 
 - `data`: YAML files for additional metadata.
 
@@ -89,6 +92,39 @@ content and output. They will be created if they do not exist:
 
 - `static`: Static files. Everything in here will be rsynced directoy over to
   `htdocs`.
+
+## Context variables
+
+The Mako templates, whether they are stand-alone or being used to render
+Markdown content, receive the following context variables:
+
+- `DATADIR`: The full path to the `data` directory.
+- `WEBROOT`: The full path to the `htdocs` directory.
+- `TEMPLATES`: A list of all templates which will potentially be rendered
+  as stand-alone. Each item in the list contains the keys `src` (relative path
+  to the source template), `src_path` (full path to the source template),
+  `target` (full path of the file to be written), and `url` (relative url to the
+  file to be written).
+- `MDCONTENT`: A list representing all the markdown files which will potentially
+  be rendered by a template. Each item in the list contains the keys
+  `source_file`, `source_file_short` (truncated and full paths to the source),
+  `target` (html file to be written), `template` (filename of the template which
+  will be used for rendering), `data` (most of the context variables seen by
+  this content), `doc` (the raw markdown source), and `url` (the `SELF_URL`
+  value for this content – see below). If the configuration setting `pre_render`
+  is True, then `rendered` (the HTML produced by converting the markdown) is
+  present as well.
+- Whatever is defined under `template_context` in the `wmk_config.yaml` file
+  (see below).
+- `SELF_URL`: The relative path to the HTML file which the output of the
+  template will be written to.
+
+When templates are rendering Markdown content, they additionally get the
+following context variables:
+
+- `CONTENT`: The rendered HTML produced from the markdown source.
+- `RAW_CONTENT`: The original markdown source.
+- Whatever is defined in the YAML meta section at the top of the markdown file.
 
 ## Notes
 
@@ -141,6 +177,13 @@ of how `wmk` operates. Currently there is support for the following settings:
 - `http`: This is is a dict for configuring the address used for `wmk serve`.
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
   (default: 127.0.0.1).
+
+- `pre_render`: If this is True, then the markdown source of each content file
+  will be converted to HTML regardless of whether an output file will be written
+  to `htdocs` or not (i.e. even if the timestamp of the output file is newer
+  than the source and the `--force` has not been specified). This is mainly
+  useful for list pages in `templates`, e.g. a blog frontpage with a list of
+  blog entries.
 
 [ext]: https://python-markdown.github.io/extensions/
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions

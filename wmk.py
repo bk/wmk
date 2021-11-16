@@ -13,6 +13,7 @@ import markdown
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
+from mako.exceptions import text_error_template
 
 
 def main(basedir=None, force=False):
@@ -30,10 +31,19 @@ def main(basedir=None, force=False):
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
+    themedir = os.path.join(
+        dirs['themes'], conf.get('theme')) if conf.get('theme') else None
+    if themedir and not os.path.exists(themedir):
+        themedir = None
+    if themedir and os.path.exists(os.path.join(themedir, 'static')):
+        os.system("rsync -a %s/ %s/" % (
+            os.path.join(themedir, 'static'), dirs['output']))
     os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
     # 2) compile assets (only scss for now):
+    theme_assets = os.path.join(themedir, 'assets') if themedir else None
     process_assets(
-        dirs['assets'], dirs['output'], conf, css_dir_from_start, force)
+        dirs['assets'], theme_assets, dirs['output'],
+        conf, css_dir_from_start, force)
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
@@ -43,10 +53,16 @@ def main(basedir=None, force=False):
         'MDCONTENT': [],
     }
     template_vars.update(conf.get('template_context', {}))
-    lookup = TemplateLookup(directories=[dirs['templates']])
+    lookup_dirs = [dirs['templates']]
+    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
+        lookup_dirs.append(os.path.join(themedir, 'templates'))
+    if conf.get('extra_template_dirs', None):
+        lookup_dirs += conf['extra_template_dirs']
+    lookup = TemplateLookup(directories=lookup_dirs)
     get_mako_shortcode_comp(lookup, conf)  # updates conf if applicable
     # 3) get info about stand-alone templates and Markdown content
-    templates = get_templates(dirs['templates'], dirs['output'], template_vars)
+    templates = get_templates(
+        dirs['templates'], themedir, dirs['output'], template_vars)
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
         template_vars, conf)
@@ -67,6 +83,7 @@ def get_dirs(basedir):
         'static': basedir + '/static',
         'assets': basedir + '/assets', # only scss for now
         'data': basedir + '/data', # YAML, potentially sqlite
+        'themes': basedir + '/themes', # extra static/assets/templates
     }
 
 
@@ -107,10 +124,22 @@ def process_templates(templates, lookup, template_vars, force):
         self_url = tpl['target'].replace(data['WEBROOT'], '', 1)
         data['SELF_URL'] = self_url
         data['SELF_TEMPLATE'] = tpl['src']
-        with open(tpl['target'], 'w') as f:
-            f.write(template.render(**data))
-        print('[%s] - template: %s' % (
-            str(datetime.datetime.now()), tpl['src']))
+        try:
+            tpl_output = template.render(**data)
+        except:
+            print("WARNING: Error when rendering {}: {}".format(
+                tpl['src_path'], text_error_template().render()))
+            tpl_output = None
+        # empty output => nothing is written
+        if tpl_output:
+            with open(tpl['target'], 'w') as f:
+                f.write(tpl_output)
+            print('[%s] - template: %s' % (
+                str(datetime.datetime.now()), tpl['src']))
+        elif tpl_output is not None:
+            # (probably) deliberately empty output
+            print("NOTICE: template {} had no output, nothing written".format(
+                tpl['src']))
 
 
 def process_markdown_content(content, lookup, conf, force):
@@ -127,10 +156,17 @@ def process_markdown_content(content, lookup, conf, force):
         html = ct['rendered'] if 'rendered' in ct else render_markdown(ct, conf)
         data['CONTENT'] = html
         data['RAW_CONTENT'] = ct['doc']
-        with open(ct['target'], 'w') as f:
-            f.write(template.render(**data))
-        print('[%s] - content: %s' % (
-            str(datetime.datetime.now()), ct['source_file']))
+        try:
+            html_output = template.render(**data)
+        except:
+            print("WARNING: Error when rendering md {}: {}".format(
+                ct['source_file_short'], text_error_template().render()))
+            html_output = None
+        if html_output:
+            with open(ct['target'], 'w') as f:
+                f.write(template.render(**data))
+            print('[%s] - content: %s' % (
+                str(datetime.datetime.now()), ct['source_file_short']))
 
 
 def render_markdown(ct, conf):
@@ -157,19 +193,26 @@ def render_markdown(ct, conf):
     return markdown.markdown(doc, extensions=extensions)
 
 
-def process_assets(assetdir, outputdir, conf, css_dir_from_start, force):
+def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, force):
     """
     Compiles assets from assetdir into outputdir.
     Only handles sass/scss files in the sass subdirectory for now.
     """
     scss_input = os.path.join(assetdir, 'scss')
-    if not os.path.exists(scss_input):
+    theme_scss = os.path.join(theme_assets, 'scss') if theme_assets else None
+    if not os.path.exists(scss_input) or (
+            theme_scss and os.path.exists(theme_scss)):
         return
     css_output = os.path.join(outputdir, 'css')
     if not os.path.exists(css_output):
         os.mkdir(css_output)
+    output_style = conf.get('sass_output_style', 'expanded')
+    if force or not css_dir_from_start or not dir_is_older_than(theme_scss, css_output):
+        force = True  # since timestamp check for normal scss is now useless
+        sass.compile(
+            dirname=(theme_scss, css_output), output_style=output_style)
+        print('[%s] - sass: theme' % datetime.datetime.now())
     if force or not css_dir_from_start or not dir_is_older_than(scss_input, css_output):
-        output_style = conf.get('sass_output_style', 'expanded')
         sass.compile(
             dirname=(scss_input, css_output), output_style=output_style)
         print('[%s] - sass: refresh' % datetime.datetime.now())
@@ -228,34 +271,43 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
     return content
 
 
-def get_templates(tpldir, outputdir, template_vars):
+def get_templates(tpldir, themedir, outputdir, template_vars):
     """
     Get those templates that need processing.
     """
     templates = []
-    for root, dirs, files in os.walk(tpldir):
-        if root.endswith('/base'):
-            continue
-        for fn in files:
-            if 'base' in fn or fn.startswith(('_', '.')):
+    seen = set()
+    searchdirs = [tpldir]
+    if os.path.exists(os.path.join(themedir, 'templates')):
+        searchdirs.append(os.path.join(themedir, 'templates'))
+    for tplroot in searchdirs:
+        for root, dirs, files in os.walk(tplroot):
+            if root.endswith('/base'):
                 continue
-            if fn.endswith('.mhtml'):
-                source = os.path.join(root.replace(tpldir, '', 1), fn)
-                if source.startswith('/'):
-                    source = source[1:]
-                # Keep an extra extension before .mhtml (e.g. "atom.xml.mhtml")
-                if re.search(r'\.\w{2,4}\.mhtml$', fn):
-                    html_fn = fn.replace('.mhtml', '')
-                else:
-                    html_fn = fn.replace('.mhtml', '.html')
-                html_dir = root.replace(tpldir, outputdir, 1)
-                target = os.path.join(html_dir, html_fn)
-                templates.append({
-                    'src': source,
-                    'src_path': os.path.join(root, fn),  # full path
-                    'target': target,
-                    'url': target.replace(outputdir, '', 1),
-                })
+            for fn in files:
+                if 'base' in fn or fn.startswith(('_', '.')):
+                    continue
+                if fn.endswith('.mhtml'):
+                    source = os.path.join(root.replace(tplroot, '', 1), fn)
+                    if source.startswith('/'):
+                        source = source[1:]
+                    # we have a theme template overridden locally
+                    if source in seen:
+                        continue
+                    seen.add(source)
+                    # Keep an extra extension before .mhtml (e.g. "atom.xml.mhtml")
+                    if re.search(r'\.\w{2,4}\.mhtml$', fn):
+                        html_fn = fn.replace('.mhtml', '')
+                    else:
+                        html_fn = fn.replace('.mhtml', '.html')
+                    html_dir = root.replace(tplroot, outputdir, 1)
+                    target = os.path.join(html_dir, html_fn)
+                    templates.append({
+                        'src': source,
+                        'src_path': os.path.join(root, fn),  # full path
+                        'target': target,
+                        'url': target.replace(outputdir, '', 1),
+                    })
     template_vars['TEMPLATES'] = templates
     return templates
 

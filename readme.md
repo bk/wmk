@@ -1,14 +1,15 @@
 # wmk
 
 This is a simple static site generator written in Python with the following
-features:
+main features:
 
 - Markdown content with YAML metadata.
 - Additional data may be loaded from separate YAML files.
 - The content is rendered using [Mako][mako] templates.
 - Stand-alone templates are also rendered if present.
+- Configurable shortcodes (though none by default).
 - Sass/SCSS support.
-- Configurable shortcodes.
+- Support for themes.
 
 [mako]: https://www.makotemplates.org/
 
@@ -186,6 +187,21 @@ of how `wmk` operates. Currently there is support for the following settings:
   than the source and the `--force` has not been specified). This is mainly
   useful for list pages in `templates`, e.g. a blog frontpage with a list of
   blog entries.
+
+- `theme`: This is the name of a subdirectory to the directory `$basedir/themes`
+  (or a symlink placed there) in which to look for extra `static`, `assets` and
+  `template` directories. Note that neither `content` nor `data` directories
+  of a theme will be used by `wmk`. A theme-provided template may be rendered as
+  stand-alone page, but only if no local template overrides it (i.e. has the
+  same relative path). Mako's internal template lookup will similarly first look
+  for referenced components in the normal `template` directory before looking in
+  the theme directory.
+
+- `extra_template_dirs`: A list of directories in which to look for Mako
+  templates. These are placed after both `$basedir/templates` and theme-provided
+  templates in the Mako search path. This makes it possible to build up a
+  library of Mako components which can be easily used on multiple sites and
+  across different themes.
 
 [ext]: https://python-markdown.github.io/extensions/
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions

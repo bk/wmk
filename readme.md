@@ -160,8 +160,9 @@ of how `wmk` operates. Currently there is support for the following settings:
   This should be a dict. The values may be overridden by markdown metadata or
   linked YAML files.
 
-- `shortcodes` and `mako_shortcodes`: A way to mix complicated or dynamic
-  content into Markdown with minimal effort. See further defails below.
+- `shortcodes` and `mako_shortcodes_dir`: A way to mix complicated or dynamic
+  content into Markdown with minimal effort. See further defails regarding
+  shortcodes below.
 
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -248,35 +249,37 @@ shortcodes:
 
 ### Mako-based shortcodes
 
-Mako-based shortcodes are implemented as `<%def>` blocks in a Mako component
-inside the `templates` directory. The name of the component is specified in the
-`wmk_config.yaml` file like this:
+Mako-based shortcodes are implemented as components named `<shortcode>.mc` in
+the `shortcodes` subdirectory of `templates` (or of some other directory in your
+Mako search path, e.g. `themes/<my-theme>/templates/shortcodes`).
+
+You can change the name of the subdirectory by setting it in your
+`wmk_config.yaml` as follows:
 
 ```yaml
-mako_shortcodes: utils/shortcodes.mc
+mako_shortcodes_dir: lib/my_shortcodes
 ```
 
-The shortcode itself looks like a function call along with an optional
-single-word directive after the closing parenthesis. Currently only one
-such directive is supported: `with_context` (or `ctx` for short). Without this
-directive, the template def only receives the arguments that are directly
-specified in the shortcode. With the directive, however, the context (i.e.
-global template variables along with whatever is defined in the metadata block)
-associated with the Markdown file containing the shortcode call is added to the
-function keyword arguments when the template def is rendered. Here is an example
-of a Mako-based shortcode call:
+The shortcode itself looks like a function call. Note that positional
+arguments can only be used if the component has an appropriate `<%page>`
+block declaring the exepected arguments.
+
+The shortcode component will have access to a context composed of (1) the
+parameters directly specified in the shortcode call; (2) the information from
+the metadata block of the markdown file in which it appears; and (3) the global
+template variables.
+
 
 ```markdown
-{{< csv_table('expenses_2021.csv') with_context >}}
+{{< csv_table('expenses_2021.csv') >}}
 ```
 
-Here is an example `shortcodes.mc` Mako component implementing a `csv_table()`
-that might handle the above shortcode call:
+Here is an example `cvs_table.mc` Mako component that might handle the above
+shortcode call:
 
 ```mako
+<%page args="cvsfile, delimiter=',', caption=None, **kwargs"/>
 <%! import os, csv %>
-
-<%def name="csv_table(cvsfile, delimiter=',', caption=None, **kwargs)">
 <%
 info = []
 with open(os.path.join(kwargs['DATADIR'], cvsfile)) as f:
@@ -306,12 +309,7 @@ keys = info[0].keys()
     % endfor
   </tbody>
 </table>
-</%def>
 ```
-
-Note that because we need to use a context variable (`DATADIR`), the shortcode
-call includes the `with_context` directive, and for the same reason the Mako def
-appends `**kwargs` to its list of arguments.
 
 ### Notes
 
@@ -322,4 +320,4 @@ processed normally.
 Mako-based shortcodes are applied before regex-based shortcodes.
 
 Currently no default shortcodes are provided. In order to use them, they must be
-configured in `wmk_config.yaml`.
+configured in `wmk_config.yaml` or added to `templates/shortcodes/`.

@@ -59,7 +59,7 @@ def main(basedir=None, force=False):
     if conf.get('extra_template_dirs', None):
         lookup_dirs += conf['extra_template_dirs']
     lookup = TemplateLookup(directories=lookup_dirs)
-    get_mako_shortcode_comp(lookup, conf)  # updates conf if applicable
+    conf['_lookup'] = lookup ## used if pre_render is true
     # 3) get info about stand-alone templates and Markdown content
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
@@ -94,18 +94,6 @@ def get_config(basedir):
         with open(filename) as f:
            conf = yaml.safe_load(f) or {}
     return conf
-
-
-def get_mako_shortcode_comp(lookup, conf):
-    try:
-        mako_shortcode_comp = conf.get('mako_shortcodes', None)
-        if mako_shortcode_comp:
-            mako_shortcode_comp = lookup.get_template(mako_shortcode_comp)
-    except Exception as e:
-        print("WARNING: Could not load shortcodes from {}: {}".format(
-            conf['mako_shortcodes'], e))
-        mako_shortcode_comp = None
-    conf['_mako_shortcode_comp'] = mako_shortcode_comp
 
 
 def process_templates(templates, lookup, template_vars, force):
@@ -176,17 +164,19 @@ def render_markdown(ct, conf):
     data = ct['data']
     doc = ct['doc']
     if '{{<' in doc:
-        mako_shortcode_comp = conf.get('_mako_shortcode_comp')
+        # 1. Mako shortcodes
+        # funcname, argstring
+        pat = r'{{< *(\w+)\( *(.*?) *\) *>}}'
+        found = re.search(pat, doc)
+        while found:
+            doc = re.sub(pat, mako_shortcode(conf, data), doc)
+            found = re.search(pat, doc)
+        # 2. Regex-based shortcodes
         if conf.get('shortcodes', None):
             for k in conf['shortcodes']:
                 sc = conf['shortcodes'][k]
                 pat = r'{{< *' + sc['pattern'] + r' *>}}'
                 doc = re.sub(pat, sc['content'], doc)
-        if mako_shortcode_comp:
-            # funcname, argstring, directive
-            pat = r'{{< *(\w+)\( *(.*?) *\) *(\w+)? *>}}'
-            handler = mako_shortcode(mako_shortcode_comp, data)
-            doc = re.sub(pat, handler, doc)
     extensions = conf.get('markdown_extensions', None)
     if extensions is None:
         extensions = ['extra', 'sane_lists']
@@ -207,7 +197,8 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
     if not os.path.exists(css_output):
         os.mkdir(css_output)
     output_style = conf.get('sass_output_style', 'expanded')
-    if force or not css_dir_from_start or not dir_is_older_than(theme_scss, css_output):
+    if theme_scss and (
+            force or not css_dir_from_start or not dir_is_older_than(theme_scss, css_output)):
         force = True  # since timestamp check for normal scss is now useless
         sass.compile(
             dirname=(theme_scss, css_output), output_style=output_style)
@@ -278,7 +269,7 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
     templates = []
     seen = set()
     searchdirs = [tpldir]
-    if os.path.exists(os.path.join(themedir, 'templates')):
+    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
         searchdirs.append(os.path.join(themedir, 'templates'))
     for tplroot in searchdirs:
         for root, dirs, files in os.walk(tplroot):
@@ -335,6 +326,8 @@ def is_older_than(src, trg):
 def dir_is_older_than(src, trg):
     # true if timestamp of newest file in src is older than
     # timestamp of newest file in trg
+    if not src:
+        return True
     if not (os.path.exists(src) and os.path.exists(trg)):
         return False
     newest_src = get_newest_ts_of_dir(src)
@@ -344,6 +337,8 @@ def dir_is_older_than(src, trg):
 
 def get_newest_ts_of_dir(src):
     newest = 0
+    if not src:
+        return newest
     for root, dirs, files in os.walk(src):
         for fn in files:
             ts = os.path.getmtime(os.path.join(root, fn))
@@ -362,25 +357,25 @@ def parse_argstr(argstr):
     return args, kwargs
 
 
-def mako_shortcode(comp, ctx):
+def mako_shortcode(conf, ctx):
     "Return a match replacement function for mako shortcode handling."
     def replacer(match):
-        defnam = match.group(1)
+        name = match.group(1)
         argstr = match.group(2)
-        directive = match.group(3) or ''
         args, kwargs = parse_argstr(argstr)
         try:
-            subcomp = comp.get_def(defnam)
-            if directive in ('with_context', 'ctx'):
-                ckwargs = {}
-                ckwargs.update(ctx)
-                ckwargs.update(kwargs)
-                return subcomp.render(*args, **ckwargs)
-            else:
-                return subcomp.render(*args, **kwargs)
+            lookup = conf['_lookup']
+            subdir = conf.get('mako_shortcodes_dir', 'shortcodes')
+            tplnam = '%s/%s.mc' % (subdir.strip('/'), name)
+            tpl = lookup.get_template(tplnam)
+            ckwargs = {}
+            ckwargs.update(ctx)
+            ckwargs.update(kwargs)
+            return tpl.render(*args, **ckwargs)
         except Exception as e:
-            print("WARNING: shortcode {} failed: {}".format(defnam, e))
-            return match.group(0)
+            print("WARNING: shortcode {} failed: {}".format(name, e))
+            # prevent infinite loops
+            return match.group(0).replace('{', '(').replace('}', ')')
     return replacer
 
 

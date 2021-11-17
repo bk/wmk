@@ -186,12 +186,12 @@ def render_markdown(ct, conf):
 def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, force):
     """
     Compiles assets from assetdir into outputdir.
-    Only handles sass/scss files in the sass subdirectory for now.
+    Only handles sass/scss files in the scss subdirectory for now.
     """
     scss_input = os.path.join(assetdir, 'scss')
     theme_scss = os.path.join(theme_assets, 'scss') if theme_assets else None
-    if not os.path.exists(scss_input) or (
-            theme_scss and os.path.exists(theme_scss)):
+    if not (os.path.exists(scss_input) or (
+            theme_scss and os.path.exists(theme_scss))):
         return
     css_output = os.path.join(outputdir, 'css')
     if not os.path.exists(css_output):
@@ -204,8 +204,13 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
             dirname=(theme_scss, css_output), output_style=output_style)
         print('[%s] - sass: theme' % datetime.datetime.now())
     if force or not css_dir_from_start or not dir_is_older_than(scss_input, css_output):
+        if not os.path.exists(scss_input):
+            return
+        include_paths = {}
+        if theme_scss:
+            include_paths = {'include_paths': [theme_scss]}
         sass.compile(
-            dirname=(scss_input, css_output), output_style=output_style)
+            dirname=(scss_input, css_output), output_style=output_style, **include_paths)
         print('[%s] - sass: refresh' % datetime.datetime.now())
 
 

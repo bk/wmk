@@ -5,6 +5,7 @@ import sys
 import datetime
 import re
 import ast
+import unicodedata
 
 import sass
 import yaml
@@ -14,6 +15,12 @@ import markdown
 from mako.template import Template
 from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template
+
+
+# Template variables with these names will be converted to date or datetime
+# objects (depending on length) - if they conform to ISO 8601.
+KNOWN_DATE_KEYS = (
+    'date', 'pubdate', 'modified_date', 'expire_date', 'created_date')
 
 
 def main(basedir=None, force=False):
@@ -59,10 +66,12 @@ def main(basedir=None, force=False):
     if conf.get('extra_template_dirs', None):
         lookup_dirs += conf['extra_template_dirs']
     lookup = TemplateLookup(directories=lookup_dirs)
-    conf['_lookup'] = lookup ## used if pre_render is true
+    conf['_lookup'] = lookup
     # 3) get info about stand-alone templates and Markdown content
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
+    index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
+    conf['_index_yaml_data'] = index_yaml or {}
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
         template_vars, conf)
@@ -140,7 +149,7 @@ def process_markdown_content(content, lookup, conf, force):
         template = lookup.get_template(ct['template'])
         maybe_mkdir(ct['target'])
         data = ct['data']
-        # depends on pre_render conf setting
+        # Since 'pre_render' was dropped, this condition should always be true.
         html = ct['rendered'] if 'rendered' in ct else render_markdown(ct, conf)
         data['CONTENT'] = html
         data['RAW_CONTENT'] = ct['doc']
@@ -150,10 +159,15 @@ def process_markdown_content(content, lookup, conf, force):
             print("WARNING: Error when rendering md {}: {}".format(
                 ct['source_file_short'], text_error_template().render()))
             html_output = None
-        if html_output:
+        if html_output and not data.get('do_not_render', False):
             with open(ct['target'], 'w') as f:
                 f.write(template.render(**data))
             print('[%s] - content: %s' % (
+                str(datetime.datetime.now()), ct['source_file_short']))
+        elif html_output:
+            # This output is non-draft but marked as not to be rendered.
+            # ("headless" in Hugo parlance)
+            print('[%s] - non-rendered: %s' % (
                 str(datetime.datetime.now()), ct['source_file_short']))
 
 
@@ -214,6 +228,26 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
         print('[%s] - sass: refresh' % datetime.datetime.now())
 
 
+def get_index_yaml_data(ctdir, datadir):
+    "Looks for index.yaml files in content dir and registers them by directory."
+    ret = {}
+    for root, dirs, files in os.walk(ctdir):
+        if not 'index.yaml' in files:
+            continue
+        curdir = root.replace(ctdir, '', 1).strip('/')
+        with open(os.path.join(root, 'index.yaml')) as yf:
+            info = yaml.safe_load(yf) or {}
+            if 'LOAD' in info:
+                with open(os.path.join(datadir, info['LOAD'])) as lf:
+                    loaded = yaml.safe_load(yf) or {}
+                    if loaded:
+                        loaded.update(info)
+                        info = loaded
+            removed = info.pop('LOAD', None)
+            ret[curdir] = info
+    return ret
+
+
 def get_content(ctdir, datadir, outputdir, template_vars, conf):
     """
     Get those markdown files that need processing.
@@ -235,21 +269,47 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                 continue
             data = {}
             data.update(template_vars)
+            # merge with data from relevant index.yaml files
+            idata = conf['_index_yaml_data']
+            for k in sorted(idata.keys()):
+                if source_file_short.strip('/').startswith(k):
+                    data.update(idata[k])
             data.update(meta)
-            template = data.get('template', default_template)
-            pretty_path = data.get('pretty_path', default_pretty_path(fn))
+            # merge with data from 'LOAD' file, if any
             if 'LOAD' in data:
                 load_path = os.path.join(datadir, data['LOAD'])
                 if os.path.exists(load_path):
                     loaded = {}
                     with open(load_path) as yf:
                         loaded = yaml.safe_load(yf) or {}
-                    data.update(loaded)
+                    for k in loaded:
+                        if not k in data:
+                            data[k] = loaded[k]
+            template = data.get('template', data.get('layout', default_template))
+            if not re.search(r'\.\w{2,5}$', template):
+                template += '.mhtml'
+            pretty_path = data.get('pretty_path', default_pretty_path(fn))
+            # Slug determines destination file
+            if 'slug' in data and re.match(r'^[a-z0-9_-]+$', data['slug']):
+                fn = re.sub(r'[^/]+\.md$', (data['slug']+'.md'), fn)
+            # Ensure that the destination file/dir only contains a limited
+            # set of characters
+            fn_parts = fn.split('/')
+            if re.search(r'[^A-Za-z0-9_.,=-]', fn_parts[-1]):
+                fn_parts[-1] = slugify(fn_parts[-1])
+            # Ensure that slug is present
+            if not 'slug' in data:
+                data['slug'] = fn_parts[-1][:-3]
+            fn = '/'.join(fn_parts)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)
             target_fn = os.path.join(html_dir, html_fn)
-            data['SELF_URL'] = target_fn.replace(outputdir, '', 1)
-            data['MTIME'] = os.path.getmtime(source_file)
+            data['SELF_URL'] = '' if data.get('do_not_render') \
+                else target_fn.replace(outputdir, '', 1)
+            data['MTIME'] = datetime.datetime.fromtimestamp(
+                os.path.getmtime(source_file))
+            # convert some common datetime strings to datetime objects
+            parse_dates(data)
             content.append({
                 'source_file': source_file,
                 'source_file_short': source_file_short,
@@ -259,12 +319,23 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                 'doc': doc,
                 'url': data['SELF_URL'],
             })
-            if conf.get('pre_render', False):
-                content[-1]['rendered'] = render_markdown(content[-1], conf)
+            content[-1]['rendered'] = render_markdown(content[-1], conf)
     template_vars['MDCONTENT'] = content
     for it in content:
         it['data']['MDCONTENT'] = content
     return content
+
+
+def parse_dates(data):
+    for k in KNOWN_DATE_KEYS:
+        if k in data:
+            try:
+                if len(data[k]) == 10:
+                    data[k] = datetime.date.fromisoformat(data[k])
+                else:
+                    data[k] = datetime.datetime.fromisoformat(data[k].replace('Z', ''))
+            except:
+                pass
 
 
 def get_templates(tpldir, themedir, outputdir, template_vars):
@@ -292,7 +363,7 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
                         continue
                     seen.add(source)
                     # Keep an extra extension before .mhtml (e.g. "atom.xml.mhtml")
-                    if re.search(r'\.\w{2,4}\.mhtml$', fn):
+                    if re.search(r'\.\w{2,5}\.mhtml$', fn):
                         html_fn = fn.replace('.mhtml', '')
                     else:
                         html_fn = fn.replace('.mhtml', '.html')
@@ -382,6 +453,48 @@ def mako_shortcode(conf, ctx):
             # prevent infinite loops
             return match.group(0).replace('{', '(').replace('}', ')')
     return replacer
+
+
+def slugify(s):
+    """
+    Make a 'slug' from the given string. If it seems to end with a file
+    extension, remove that first and re-append a lower case version of it before
+    returning the result. Probably only works for Latin text.
+    """
+    ext = ''
+    ext_re = r'(\.[a-zA-Z0-9]{1,8})$'
+    found = re.search(ext_re, s)
+    if found:
+        ext = found.group(1).lower()
+        s = re.sub(ext_re, '', s)
+
+    # Get rid of single quotes
+    s = re.sub(r"[']+", '-', s)
+
+    # Remove accents
+    s = ''.join(c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn')
+    s = s.lower()
+    # Normalization may leave extra quotes (?)
+    s = re.sub(r"[']+", '-', s)
+
+    # Some special chars:
+    for c, r in (('þ', 'th'), ('æ', 'ae'), ('ð', 'd')):
+        s = s.replace(unicodedata.normalize('NFKD', c), r)
+
+    ret = ''
+
+    for _ in s:
+        if re.match(r'^[-a-z0-9]$', _):
+            ret += _
+        elif not re.match(r'^[´¨`]$', _):
+            ret += '-'
+
+    # Prevent double dashes, remove leading and trailing ones
+    ret = re.sub(r'--+', '-', ret)
+    ret = ret.strip('-')
+
+    return ret + ext
 
 
 if __name__ == '__main__':

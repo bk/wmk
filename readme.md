@@ -7,7 +7,7 @@ main features:
 - Additional data may be loaded from separate YAML files.
 - The content is rendered using [Mako][mako] templates.
 - Stand-alone templates are also rendered if present.
-- Configurable shortcodes (though none by default).
+- Configurable shortcodes (though none built-in at present).
 - Sass/SCSS support.
 - Support for themes.
 
@@ -96,6 +96,25 @@ content and output. They will be created if they do not exist:
 - `static`: Static files. Everything in here will be rsynced directoy over to
   `htdocs`.
 
+## Notes
+
+* The order of operations is as follows: (1) Copy files from `static/`; (2) run
+  asset pipeline; (3) render Mako templates from `templates`; (4) render
+  Markdown content from `content`.
+
+  Note that later steps may overwrite files placed by earlier steps.
+
+* For the `run` and `watch` actions, `wmk.py` uses timestamps to prevent
+  unnecessary re-rendering of templates, markdown files and scss sources. The
+  check is rather primitive so it may be necessary to touch the main source file
+  or remove files from `htdocs` in order to trigger a refresh. To force a
+  rebuild of all files, one can also use the `--force` (or `-f`) switch as
+  an extra argument.
+
+* If files are removed from source directories the corresponding files in
+  `htdocs` will not disappear automatically. You have to clear them out
+  manually.
+
 ## Context variables
 
 The Mako templates, whether they are stand-alone or being used to render
@@ -127,29 +146,15 @@ following context variables:
 
 - `CONTENT`: The rendered HTML produced from the markdown source.
 - `RAW_CONTENT`: The original markdown source.
-- Whatever is defined in the YAML meta section at the top of the markdown file.
+- `MTIME`: A datetime object representing the modification time for the markdown
+  file.
+- Whatever is defined in the YAML meta section at the top of the markdown file,
+  in the `template_context` section of `wmk_config.yaml`, as well as in
+  `index.yaml` files in the markdown file directory and its parent directories
+  inside `content`.
 
-## Notes
-
-* The order of operations is as follows:
-
-  1. Copy files from `static/`.
-  2. Run asset pipeline.
-  3. Render Mako templates from `templates`.
-  4. Render Markdown content from `content`.
-
-  Note that later steps may overwrite files placed by earlier steps.
-
-* For the `run` and `watch` actions, `wmk.py` uses timestamps to prevent
-  unnecessary re-rendering of templates, markdown files and scss sources. The
-  check is rather primitive so it may be necessary to touch the main source file
-  or remove files from `htdocs` in order to trigger a refresh. To force a
-  rebuild of all files, one can also use the `--force` (or `-f`) switch as
-  an extra argument.
-
-* If files are removed from source directories the corresponding files in
-  `htdocs` will not disappear automatically. You have to clear them out
-  manually.
+For further details on context variables set in the markdown frontmatter and in
+`index.yaml` files, see below under "Frontmatter variables".
 
 ## Config file
 
@@ -181,13 +186,6 @@ of how `wmk` operates. Currently there is support for the following settings:
 - `http`: This is is a dict for configuring the address used for `wmk serve`.
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
   (default: 127.0.0.1).
-
-- `pre_render`: If this is True, then the markdown source of each content file
-  will be converted to HTML regardless of whether an output file will be written
-  to `htdocs` or not (i.e. even if the timestamp of the output file is newer
-  than the source and the `--force` has not been specified). This is mainly
-  useful for list pages in `templates`, e.g. a blog frontpage with a list of
-  blog entries.
 
 - `theme`: This is the name of a subdirectory to the directory `$basedir/themes`
   (or a symlink placed there) in which to look for extra `static`, `assets` and
@@ -278,11 +276,11 @@ Here is an example `cvs_table.mc` Mako component that might handle the above
 shortcode call:
 
 ```mako
-<%page args="cvsfile, delimiter=',', caption=None, **kwargs"/>
+<%page args="csvfile, delimiter=',', caption=None, **kwargs"/>
 <%! import os, csv %>
 <%
 info = []
-with open(os.path.join(kwargs['DATADIR'], cvsfile)) as f:
+with open(os.path.join(kwargs['DATADIR'], csvfile)) as f:
     info = list(csv.DictReader(f, delimiter=delimiter))
 if not info:
     return ''
@@ -321,3 +319,202 @@ Mako-based shortcodes are applied before regex-based shortcodes.
 
 Currently no default shortcodes are provided. In order to use them, they must be
 configured in `wmk_config.yaml` or added to `templates/shortcodes/`.
+
+
+## Frontmatter variables
+
+When a markdown file is rendered, the Mako template receives a number of
+variables as partly described above. A few of these variables, such as
+`MDTEMPLATES` and `DATADIR` are set directly by `wmk` (see above). Others are
+user-configured and set in one of the following places, with the last-mentioned
+sources having the highest priority for any given variable name: (1)
+`wmk_config.yaml`, under the key `template_context`; (2) the cascade of
+`index.yaml` files in the `content` directory and its subdirectories; (3) the
+YAML frontmatter of the markdown file itself. Let us call all of these
+"frontmatter variables" for short, even if they are gathered from this cascade
+of increasingly specific sources.
+
+Before loading the frontmatter of the markdown file itself, `wmk` will thus
+start by looking in `wmk_config.yamk` for whatever is defined in
+`template_context`. Then it will loook for `index.yaml` files in each parent
+directory of the markdown file in question, starting at the root of the
+`content` directory and moving upwards, at each step extending and potentially
+overriding the data gathered at previous stages. Only then will the YAML in the
+frontmatter of the file itself be parsed and added to the data.
+
+At any point, a data source in this cascade may specify an extra YAML file using
+the special `LOAD` variable. This file will then be loaded as well and
+subsequently treated as if the data in it had been specified directly in the
+file with the `LOAD` directive.
+
+Which variables are defined and used by templates is very much up the user,
+although a few of them have a predefined meaning to `wmk` itself. For making it
+easier to switch between diffent themes it is however suggested to stick to the
+following meaning of some of the variables:
+
+### System variables
+
+The following frontmatter variables affect the operation of `wmk` itself, rather
+than being exclusively handled by templates.
+
+#### Templates
+
+- `template` specifies the Mako template which will render the content.
+
+- `layout` is used by several other static site generators. For compatibility
+  with them, this variable is supported as fallback synonym with `template`.
+  It has no effect unless `template` has not been specified explicitly anywhere
+  in the cascade of frontmatter data sources.
+
+For both `template` and `layout`, the `.mhtml` extension of the template may be
+omitted. If the `template` value appears to have no extension, `.mhtml` is
+assumed; but if the intended template file has a different extension, then it
+of course cannot be omitted.
+
+If neither `template` nor `layout` has been specified and no `default_template`
+setting is found in `wmk_config.yaml`, the default template name for markdown
+files is `md_base.mhtml`.
+
+#### Affects rendering
+
+- `slug`: If the value of `slug` is nonempty and consists exclusively of
+  lowercase alphanumeric characters, underscores and hyphens (i.e. matches the
+  regular expression `^[a-z0-9_-]+$`), then this will be used instead of the
+  basename of the markdown file to determine where to write the output.
+  If a `slug` variable is missing, one will be automatically added by `wmk`
+  based on the basename of the current markdown file. Templates should therefore
+  be able to depend upon slugs always being present. Note that slugs are not
+  guaranteed to be unique, although that is good practice.
+
+- `pretty_path`: If this is true, the basename of the markdown filename (or the
+  slug) will become a directory name and the HTML output will be written to
+  `index.html` inside that directory. By default it is false for files named
+  `index.md` and true for all other files. If the filename contains symbols that
+  do not match the character class `[\w.,=-]`, then it will be "slugified" before
+  final processing (although this only works for languages using the Latin
+  alphabet).
+
+- `do_not_render`: Tells `wmk` not to write the output of this template to a
+  file in `htdocs`. All other processing will be done, so the gathered information
+  can be used by templates for various purposes. (This is similar to the
+  `headless` setting in Hugo).
+
+- `draft`: If this is true, it prevents further processing of the markdown file
+  unless `render_drafts` has been set to true in the config file.
+
+Note that if two files in the same directory have the same slug, they may both
+be rendered to the same output file; it is unpredictable which of them will go
+last (and thus "win the race"). The same kind of conflict may arise between a
+slug and a filename or even between two filenames containing non-ascii
+characters. It is up to the content author to take care to avoid this; `wmk`
+does nothing to prevent it, although it does emit a warning if the same filename
+is written to more than once during markdown processing.
+
+### Standard variables and their recommended meaning
+
+The following variables are not used directly by `wmk` but affect templates in
+different ways. It is a list of recommendations rather than something which
+must be followed at all costs.
+
+#### Classic meta tags
+
+These variables mostly relate to the text content and affect the metadata
+section of the `<head>` of the HTML page.
+
+- `title`: The title of the page, typically placed in the `<title>` tag in the
+  `<head>` and used as a heading on the page. Normally the title should not be
+  repeated as a header in the body of the markdown file.
+
+- `description`: Affects the `<meta name="description" ...>` tag in the `<head>`
+  of the page. The variable `summary` (see later) may also be used as fallback
+  here.
+
+- `keywords`: Affects the `<meta name="keywords" ...>` tag in the `<head>`
+  of the page. This may be either a list or a string (where items are separated
+  with commas).
+
+- `robots`: Instructions for Google and other search engines (e.g. `noindex,
+  nofollow`) should be placed in this variable.
+
+- `author`: The name of the author (if there is only one). May lead to `<meta
+  name="keywords" ...>` tag in the `<head>` as well as appear in the body of the
+  rendered HTML file.
+
+- `authors`: If there are many authors they may be specified here as a list.
+  It is up to the template how to handle it if both `author` and `authors` are
+  specified, but one way is to add the `author` to the `authors` unless already
+  present in the list.
+
+- `summary`: This may affect the `<meta name="description" ...>` tag as a
+  fallback if no `description` is provided, but its main purpose is for list
+  pages with article teasers and similar content.
+
+Note that this is by no means an exhaustive list of variables likely to affect
+the `<head>` of the page. Notably, several other variables may affect meta tags
+used for sharing on social media. The most common is probably `image` (described
+below). In any case, the implementation itself is up to the theme or template
+author.
+
+#### Dates
+
+Dates and datetimes should normally be in a format conformant with or similar to
+ISO 8601, e.g. `2021-09-19` and `2021-09-19T09:19:21+00:00`. The `T` may be
+replaced with a space and the time zone may be omitted (localtime is assumed).
+If the datetime string contains hours it should also contain minutes, but
+seconds may be omitted. If these rules are followed, the following variables
+are converted to date or datetime objects (depending on the length of the
+string) before they are passed on to templates.
+
+- `date`: A generic date or datetime associated with the document.
+
+- `pubdate`: The date/datetime when first published. Currently `wmk` does not
+  skip files with `pubdate` in the future, but it may do so in a later version.
+
+- `modified_date`: The last-modified date/datetime. Note that `wmk` will also
+  add the variable `MTIME`, which is the modification time of the  of the file
+  containing the markdown source, so this information can be inferred from
+  that if this variable is not explicitly specified.
+
+- `created_date`: The date the document was first created.
+
+- `expire_date`: The date from which the document should no longer be published.
+  Similarly to `pubdate`, this currently has no effect on `wmk` but may do so in
+  a later version.
+
+#### Media content
+
+- `image`: The main image associated with the document. Affects the `og:image`
+  meta tag in HTML output and may be used for both teasers and content rendering.
+
+- `images`: A list of images associated with the document. If `image` is not
+  specified, the main image will be taken to be the first in the list
+
+- `audio`: A list of audio files/urls associated with this document.
+
+- `videos`: A list of video files/urls associated with this document.
+
+- `attachments`: A list of attachments (e.g. PDF files) associated with this
+  document.
+
+### Taxonomy
+
+- `section`: One of a quite small number of sections on the site, often
+  corresponding to the leading subdirectory in `content`. E.g.  "blog", "docs",
+  "products".
+
+- `categories`: A list of broad categories the page belongs to. E.g. "Art",
+  "Science", "Food". The first-named category may be regarded as the primary
+  one.
+
+- `tags`: A list of tags relevant to the content of the page. E.g. "quantum
+  physics", "knitting", "Italian food".
+
+- `weight`: A measure of importance attached to a page and used as an ordering
+  key for a list of pages. This should be a positive integer. The list is
+  normally ascending, i.e. with the lower numbers at the top. (Pages may of
+  course be ordered by other criteria, e.g. by `pubdate`).
+
+You should avoid having subdirectories named `categories` (or `category`) and
+`tags` (or `tag`) in your `content` directory since it is likely that list
+templates will be writing HTML content to the corresponding directories in
+`htdocs`.

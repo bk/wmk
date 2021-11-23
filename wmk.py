@@ -119,6 +119,7 @@ def process_templates(templates, lookup, template_vars, force):
         data = template_vars
         maybe_mkdir(tpl['target'])
         self_url = tpl['target'].replace(data['WEBROOT'], '', 1)
+        self_url = re.sub(r'/index.html$', '/', self_url)
         data['SELF_URL'] = self_url
         data['SELF_TEMPLATE'] = tpl['src']
         try:

@@ -207,9 +207,10 @@ of how `wmk` operates. Currently there is support for the following settings:
 
 ## Shortcodes
 
-A shortcode consists of an opening tag, `{{<`, followed by any number of spaces,
-followed by a string representing the "short version" of the content, followed
-by any number of spaces and the closing tag `>}}`. It should stay on one line.
+A shortcode consists of an opening tag, `{{<`, followed by any number of
+whitespace characters, followed by a string representing the "short version" of
+the content, followed by any number of whitespace characters and the closing tag
+`>}}`.
 
 A typical use case is to easily embed content from external sites into your
 Markdown. More advanced possibilities include formatting a table containing data
@@ -220,8 +221,8 @@ in `wmk_config.yaml`; and (2) shortcodes defined in a specified Mako template.
 
 ### Regex-based shortcodes
 
-Here is an example of a simple regex-based shortcode for easily embedding
-YouTube videos:
+Regex-based shortcodes can be used for simple content replacement.  Here is an
+example of a simple regex-based shortcode for easily embedding YouTube videos:
 
 ```markdown
 {{< youtube p118YbxFtGg >}}
@@ -245,10 +246,13 @@ shortcodes:
       allowfullscreen></iframe></div>
 ```
 
+Note that regex-based shortcodes should stay on one line.
+
 ### Mako-based shortcodes
 
-Mako-based shortcodes are implemented as components named `<shortcode>.mc` in
-the `shortcodes` subdirectory of `templates` (or of some other directory in your
+For more complex needs, Mako-based shortcodes are the way to go. They are
+implemented as components named `<shortcode>.mc` in the `shortcodes`
+subdirectory of `templates` (or of some other directory in your
 Mako search path, e.g. `themes/<my-theme>/templates/shortcodes`).
 
 You can change the name of the subdirectory by setting it in your
@@ -308,6 +312,24 @@ keys = info[0].keys()
   </tbody>
 </table>
 ```
+
+Mako-based shortcodes can take up more than one line whenever convenient, for
+instance:
+
+```markdown
+{{< figure(
+      img="/img/2021/11/crocodile-or-alligator.jpg",
+      caption="""
+Although they appear similar, **crocodiles** and **alligators** differ in easy-to-spot ways:
+
+- crocodiles have narrower and longer heads;
+- their snouts are more V-shaped;
+- also, crocodiles have a protruding tooth, visible when their mouth is closed.
+""") >}}
+```
+
+In this example, the caption contains Markdown which would be converted to HTML
+by the shortcode component.
 
 ### Notes
 

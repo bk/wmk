@@ -181,11 +181,11 @@ def render_markdown(ct, conf):
     if '{{<' in doc:
         # 1. Mako shortcodes
         # funcname, argstring
-        pat = r'{{< *(\w+)\( *(.*?) *\) *>}}'
-        found = re.search(pat, doc)
+        pat = r'{{<\s*(\w+)\(\s*(.*?)\s*\)\s*>}}'
+        found = re.search(pat, doc, re.DOTALL)
         while found:
-            doc = re.sub(pat, mako_shortcode(conf, data), doc)
-            found = re.search(pat, doc)
+            doc = re.sub(pat, mako_shortcode(conf, data), doc, flags=re.DOTALL)
+            found = re.search(pat, doc, re.DOTALL)
         # 2. Regex-based shortcodes
         if conf.get('shortcodes', None):
             for k in conf['shortcodes']:

@@ -55,6 +55,7 @@ def main(basedir=None, force=False):
     # and process_markdown_content.
     template_vars = {
         'DATADIR': os.path.realpath(dirs['data']),
+        'CONTENTDIR': os.path.realpath(dirs['content']),
         'WEBROOT': os.path.realpath(dirs['output']),
         'TEMPLATES': [],
         'MDCONTENT': [],
@@ -309,6 +310,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                 else target_fn.replace(outputdir, '', 1)
             data['MTIME'] = datetime.datetime.fromtimestamp(
                 os.path.getmtime(source_file))
+            data['RENDERER'] = lambda x: render_markdown(x, conf)
             # convert some common datetime strings to datetime objects
             parse_dates(data)
             content.append({

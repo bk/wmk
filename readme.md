@@ -122,6 +122,7 @@ Markdown content, receive the following context variables:
 
 - `DATADIR`: The full path to the `data` directory.
 - `WEBROOT`: The full path to the `htdocs` directory.
+- `CONTENTDIR`: The full path to the `content` directory.
 - `TEMPLATES`: A list of all templates which will potentially be rendered
   as stand-alone. Each item in the list contains the keys `src` (relative path
   to the source template), `src_path` (full path to the source template),
@@ -135,7 +136,7 @@ Markdown content, receive the following context variables:
   this content), `doc` (the raw markdown source), and `url` (the `SELF_URL`
   value for this content – see below). If the configuration setting `pre_render`
   is True, then `rendered` (the HTML produced by converting the markdown) is
-  present as well.
+  present as well. Note that `MDCONTENT` is not available inside shortcodes.
 - Whatever is defined under `template_context` in the `wmk_config.yaml` file
   (see below).
 - `SELF_URL`: The relative path to the HTML file which the output of the
@@ -148,6 +149,11 @@ following context variables:
 - `RAW_CONTENT`: The original markdown source.
 - `MTIME`: A datetime object representing the modification time for the markdown
   file.
+- `RENDERER`: A callable which enables a template to render markdown in `wmk`'s
+  own environment. This is mainly so that it is possible to support shortcodes
+  which depend on other markdown content which itself may contain shortcodes.
+  The callable receives a dict containing the keys `doc` (the markdown) and
+  `data` (the context variables) and returns rendered HTML.
 - Whatever is defined in the YAML meta section at the top of the markdown file,
   in the `template_context` section of `wmk_config.yaml`, as well as in
   `index.yaml` files in the markdown file directory and its parent directories

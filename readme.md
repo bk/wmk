@@ -171,10 +171,6 @@ of how `wmk` operates. Currently there is support for the following settings:
   This should be a dict. The values may be overridden by markdown metadata or
   linked YAML files.
 
-- `shortcodes` and `mako_shortcodes_dir`: A way to mix complicated or dynamic
-  content into Markdown with minimal effort. See further defails regarding
-  shortcodes below.
-
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
   (so that the `draft` status flag is ignored) by setting `render_drafts` to True
@@ -510,7 +506,7 @@ string) before they are passed on to templates.
 - `attachments`: A list of attachments (e.g. PDF files) associated with this
   document.
 
-### Taxonomy
+#### Taxonomy
 
 - `section`: One of a quite small number of sections on the site, often
   corresponding to the leading subdirectory in `content`. E.g.  "blog", "docs",

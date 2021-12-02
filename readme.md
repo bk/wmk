@@ -228,8 +228,9 @@ block declaring the exepected arguments.
 
 The shortcode component will have access to a context composed of (1) the
 parameters directly specified in the shortcode call; (2) the information from
-the metadata block of the markdown file in which it appears; and (3) the global
-template variables.
+the metadata block of the markdown file in which it appears; (3) a counter
+variable, `nth`, indicating number of invocations for that kind of shortcode in
+that markdown document; and (4) the global template variables.
 
 Shortcodes are applied **before** the Markdown document is converted to HTML, so
 it is possible to replace a shortcode with Markdown content which will then be
@@ -302,23 +303,24 @@ by the shortcode component.
 The following default shortcodes are provided by `wmk`:
 
 - `figure`: An image wrapped in a `<figure>` tag. Accepts the following
-  arguments: `src` (the image path or URL), `link`, `caption`, `title`, `alt`,
-  `credit` (image attribution), `credit_link`, `width`, `height`, `resize`.
-  Except for `src`, all arguments are optional. The caption and credit will be
-  treated as markdown. If `resize` is True and width and height have been
-  provided, then a resized version of the image is used instead of the original
-  via the `resize_image` shortcode (the details can be controlled by specifying
-  a dict representing `resize_image` arguments rather than a boolean; see
-  below).
+  arguments: `src` (the image path or URL), `img_link`, `link_target`,
+  `caption`, `figtitle`, `alt`, `credit` (image attribution), `credit_link`,
+  `width`, `height`, `resize`.  Except for `src`, all arguments are optional.
+  The caption and credit will be treated as markdown. If `resize` is True and
+  width and height have been provided, then a resized version of the image is
+  used instead of the original via the `resize_image` shortcode (the details can
+  be controlled by specifying a dict representing `resize_image` arguments
+  rather than a boolean; see below).
 
 - `gist`: A Github gist. Two arguments, both required: `username` and `gist_id`.
 
-- `resize_image`: Required arguments: `path`, `width`, `height`. Optional
-  arguments: `op` ('fit_width', 'fit_height', 'fit', 'fill'; the last is the
-  default), `format` ('jpg' or 'png'; default is 'jpg'), `quality` (default
-  0.75). Returns a path under `/resized_images/` (possibly prefixed with the
-  value of `site_leading_path`) pointing to the resized version of the image.
-  The filename is a SHA1 hash + an extension, so repeated requests for the same
+- `resize_image`: Scales and crops images to a specified size. Required
+  arguments: `path`, `width`, `height`. Optional arguments: `op` ('fit_width',
+  'fit_height', 'fit', 'fill'; the last is the default), `format` ('jpg' or
+  'png'; default is 'jpg'), `quality` (default 0.75 and applies only to jpegs).
+  Returns a path under `/resized_images/` (possibly prefixed with the value of
+  `site_leading_path`) pointing to the resized version of the image.  The
+  filename is a SHA1 hash + an extension, so repeated requests for the same
   resize operation are only performed once.  The source `path` is taken to be
   relative to the `WEBROOT`, i.e. the project `htdocs` directory.
 

@@ -222,51 +222,9 @@ A typical use case is to easily embed content from external sites into your
 Markdown. More advanced possibilities include formatting a table containing data
 from a CSV file or generating a cropped and scaled thumbnail image.
 
-There are two types of shortcodes: (1) regex-based shortcodes, defined directly
-in `wmk_config.yaml`; and (2) shortcodes defined in a specified Mako template.
-
-### Regex-based shortcodes
-
-Regex-based shortcodes can be used for simple content replacement.  Here is an
-example of a simple regex-based shortcode for easily embedding YouTube videos:
-
-```markdown
-{{< youtube p118YbxFtGg >}}
-```
-
-The value of the `shortcodes` section of the config file should be a dict where
-the key is an identifier for the type of shortcode and the value should be a
-dict with two keys, `pattern` and `content`. The pattern is a regular expression
-and the content is substituted for the shortcode string. Here is a working example:
-
-```yaml
-shortcodes:
-  youtube:
-    pattern: youtube (\S+)
-    content: >-
-      <div class="video-container"><iframe
-      width="560" height="315"
-      src="https://www.youtube.com/embed/\g<1>"
-      title="YouTube video player" frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen></iframe></div>
-```
-
-Note that regex-based shortcodes should stay on one line.
-
-### Mako-based shortcodes
-
-For more complex needs, Mako-based shortcodes are the way to go. They are
-implemented as components named `<shortcode>.mc` in the `shortcodes`
-subdirectory of `templates` (or of some other directory in your
+Shortcodes are implemented as Mako components named `<shortcode>.mc` in the
+`shortcodes` subdirectory of `templates` (or of some other directory in your
 Mako search path, e.g. `themes/<my-theme>/templates/shortcodes`).
-
-You can change the name of the subdirectory by setting it in your
-`wmk_config.yaml` as follows:
-
-```yaml
-mako_shortcodes_dir: lib/my_shortcodes
-```
 
 The shortcode itself looks like a function call. Note that positional
 arguments can only be used if the component has an appropriate `<%page>`
@@ -277,12 +235,19 @@ parameters directly specified in the shortcode call; (2) the information from
 the metadata block of the markdown file in which it appears; and (3) the global
 template variables.
 
+Shortcodes are applied **before** the Markdown document is converted to HTML, so
+it is possible to replace a shortcode with Markdown content which will then be
+processed normally.
+
+Here is an example of a shortcode in Markdown:
 
 ```markdown
+### Yearly expenses
+
 {{< csv_table('expenses_2021.csv') >}}
 ```
 
-Here is an example `cvs_table.mc` Mako component that might handle the above
+Here is an example `csv_table.mc` Mako component that might handle the above
 shortcode call:
 
 ```mako
@@ -319,12 +284,11 @@ keys = info[0].keys()
 </table>
 ```
 
-Mako-based shortcodes can take up more than one line whenever convenient, for
-instance:
+Shortcodes can take up more than one line if desired, for instance:
 
 ```markdown
 {{< figure(
-      img="/img/2021/11/crocodile-or-alligator.jpg",
+      src="/img/2021/11/crocodile-or-alligator.jpg",
       caption="""
 Although they appear similar, **crocodiles** and **alligators** differ in easy-to-spot ways:
 
@@ -337,16 +301,39 @@ Although they appear similar, **crocodiles** and **alligators** differ in easy-t
 In this example, the caption contains Markdown which would be converted to HTML
 by the shortcode component.
 
-### Notes
+### Default shortcodes
 
-Shortcodes are applied **before** the Markdown document is converted to HTML, so
-it is possible to replace a shortcode with Markdown content which will then be
-processed normally.
+The following default shortcodes are provided by `wmk`:
 
-Mako-based shortcodes are applied before regex-based shortcodes.
+- `figure`: An image wrapped in a `<figure>` tag. Accepts the following
+  arguments: `src` (the image path or URL), `link`, `caption`, `title`, `alt`,
+  `credit` (image attribution), `credit_link`, `width`, `height`, `resize`.
+  Except for `src`, all arguments are optional. The caption and credit will be
+  treated as markdown. If `resize` is True and width and height have been
+  provided, then a resized version of the image is used instead of the original
+  via the `resize_image` shortcode (the details can be controlled by specifying
+  a dict representing `resize_image` arguments rather than a boolean; see
+  below).
 
-Currently no default shortcodes are provided. In order to use them, they must be
-configured in `wmk_config.yaml` or added to `templates/shortcodes/`.
+- `gist`: A Github gist. Two arguments, both required: `username` and `gist_id`.
+
+- `resize_image`: Required arguments: `path`, `width`, `height`. Optional
+  arguments: `op` ('fit_width', 'fit_height', 'fit', 'fill'; the last is the
+  default), `format` ('jpg' or 'png'; default is 'jpg'), `quality` (default
+  0.75). Returns a path under `/resized_images/` (possibly prefixed with the
+  value of `site_leading_path`) pointing to the resized version of the image.
+  The filename is a SHA1 hash + an extension, so repeated requests for the same
+  resize operation are only performed once.  The source `path` is taken to be
+  relative to the `WEBROOT`, i.e. the project `htdocs` directory.
+
+- `twitter`: A tweet. Takes a `tweet_id`, which may be a Twitter status URL or
+  the last part (i.e. the actual ID) of the URL.
+
+- `vimeo`: A Vimeo video. One required argument: `id`. Optional arguments:
+  `css_class`, `autoplay`, `dnt` (do not track), `muted`, `title`.
+
+- `youtube`: A YouTube video. One required argument: `id`. Optional arguments:
+  `css_class`, `autoplay`, `title`.
 
 
 ## Frontmatter variables
@@ -435,8 +422,7 @@ be rendered to the same output file; it is unpredictable which of them will go
 last (and thus "win the race"). The same kind of conflict may arise between a
 slug and a filename or even between two filenames containing non-ascii
 characters. It is up to the content author to take care to avoid this; `wmk`
-does nothing to prevent it, although it does emit a warning if the same filename
-is written to more than once during markdown processing.
+does nothing to prevent it.
 
 ### Standard variables and their recommended meaning
 
@@ -499,7 +485,7 @@ string) before they are passed on to templates.
   skip files with `pubdate` in the future, but it may do so in a later version.
 
 - `modified_date`: The last-modified date/datetime. Note that `wmk` will also
-  add the variable `MTIME`, which is the modification time of the  of the file
+  add the variable `MTIME`, which is the modification time of the file
   containing the markdown source, so this information can be inferred from
   that if this variable is not explicitly specified.
 
@@ -515,7 +501,7 @@ string) before they are passed on to templates.
   meta tag in HTML output and may be used for both teasers and content rendering.
 
 - `images`: A list of images associated with the document. If `image` is not
-  specified, the main image will be taken to be the first in the list
+  specified, the main image will be taken to be the first in the list.
 
 - `audio`: A list of audio files/urls associated with this document.
 

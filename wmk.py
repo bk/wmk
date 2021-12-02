@@ -66,6 +66,9 @@ def main(basedir=None, force=False):
         lookup_dirs.append(os.path.join(themedir, 'templates'))
     if conf.get('extra_template_dirs', None):
         lookup_dirs += conf['extra_template_dirs']
+    # Add wmk_home templates for "built-in" shortcodes
+    wmk_home = os.path.dirname(os.path.realpath(__file__))
+    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
     lookup = TemplateLookup(directories=lookup_dirs)
     conf['_lookup'] = lookup
     # 3) get info about stand-alone templates and Markdown content
@@ -180,19 +183,13 @@ def render_markdown(ct, conf):
     data = ct['data']
     doc = ct['doc']
     if '{{<' in doc:
-        # 1. Mako shortcodes
+        # Mako shortcodes
         # funcname, argstring
         pat = r'{{<\s*(\w+)\(\s*(.*?)\s*\)\s*>}}'
         found = re.search(pat, doc, re.DOTALL)
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
-        # 2. Regex-based shortcodes
-        if conf.get('shortcodes', None):
-            for k in conf['shortcodes']:
-                sc = conf['shortcodes'][k]
-                pat = r'{{< *' + sc['pattern'] + r' *>}}'
-                doc = re.sub(pat, sc['content'], doc)
     extensions = conf.get('markdown_extensions', None)
     if extensions is None:
         extensions = ['extra', 'sane_lists']

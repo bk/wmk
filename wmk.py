@@ -182,13 +182,14 @@ def render_markdown(ct, conf):
         return ct['CONTENT']
     data = ct['data']
     doc = ct['doc']
+    nth = {}
     if '{{<' in doc:
         # Mako shortcodes
         # funcname, argstring
         pat = r'{{<\s*(\w+)\(\s*(.*?)\s*\)\s*>}}'
         found = re.search(pat, doc, re.DOTALL)
         while found:
-            doc = re.sub(pat, mako_shortcode(conf, data), doc, flags=re.DOTALL)
+            doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
     extensions = conf.get('markdown_extensions', None)
     if extensions is None:
@@ -433,10 +434,16 @@ def parse_argstr(argstr):
     return args, kwargs
 
 
-def mako_shortcode(conf, ctx):
+def mako_shortcode(conf, ctx, nth=None):
     "Return a match replacement function for mako shortcode handling."
+    if nth is None:
+        nth = {}
     def replacer(match):
         name = match.group(1)
+        if name in nth:
+            nth[name] += 1
+        else:
+            nth[name] = 1
         argstr = match.group(2)
         args, kwargs = parse_argstr(argstr)
         try:
@@ -447,6 +454,7 @@ def mako_shortcode(conf, ctx):
             ckwargs = {}
             ckwargs.update(ctx)
             ckwargs.update(kwargs)
+            ckwargs['nth'] = nth[name]  # invocation count
             return tpl.render(*args, **ckwargs)
         except Exception as e:
             print("WARNING: shortcode {} failed: {}".format(name, e))

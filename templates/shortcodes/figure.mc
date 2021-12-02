@@ -1,4 +1,4 @@
-<%page args="src, title=None, link=None, caption=None, alt=None,  credit=None, credit_link=None, width=None, height=None, resize=False" />
+<%page args="src, figtitle=None, img_link=None, link_target=None, caption=None, alt=None,  credit=None, credit_link=None, width=None, height=None, resize=False" />
 <%! import markdown %>
 <%namespace name="resiz" file="resize_image.mc" />
 <%
@@ -15,17 +15,17 @@ if resize:
     src = capture(lambda: resiz.body(**resize_kwargs))
 %>
 <figure${ ' class="{}"'.format(css_class) if css_class else '' }>
-  % if link:
-    <a href="${link}"${ ' target="{}"'.format(link_target) if link_target else '' }>
+  % if img_link:
+    <a href="${img_link}"${ ' target="{}"'.format(link_target) if link_target else '' }>
   % endif
   <img src="${src}" alt="${alt}"${ ' width="{}"'.format(width) if width else '' }${ ' height="{}"'.format(height) if height else '' }>
   % if link:
     </a>
   % endif
-  % if title or caption or credit:
+  % if figtitle or caption or credit:
     <figcaption>
-      % if title:
-        <h4>${ title }</h4>
+      % if figtitle:
+        <h4>${ figtitle }</h4>
       % endif
       % if caption:
         <div class="caption">${ markdown.markdown(caption) }</div>

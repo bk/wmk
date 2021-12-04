@@ -1,2 +1,3 @@
 venv/
 htdocs/
+__pycache__/

@@ -15,6 +15,7 @@ import markdown
 from mako.template import Template
 from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template
+from mako.runtime import Undefined
 
 
 # Template variables with these names will be converted to date or datetime
@@ -61,6 +62,7 @@ def main(basedir=None, force=False):
         'MDCONTENT': [],
     }
     template_vars.update(conf.get('template_context', {}))
+    template_vars['site'] = attrdict(conf.get('site', {}))
     lookup_dirs = [dirs['templates']]
     if themedir and os.path.exists(os.path.join(themedir, 'templates')):
         lookup_dirs.append(os.path.join(themedir, 'templates'))
@@ -126,6 +128,7 @@ def process_templates(templates, lookup, template_vars, force):
         self_url = re.sub(r'/index.html$', '/', self_url)
         data['SELF_URL'] = self_url
         data['SELF_TEMPLATE'] = tpl['src']
+        data['page'] = attrdict({}) # empty but present...
         try:
             tpl_output = template.render(**data)
         except:
@@ -158,13 +161,14 @@ def process_markdown_content(content, lookup, conf, force):
         html = ct['rendered'] if 'rendered' in ct else render_markdown(ct, conf)
         data['CONTENT'] = html
         data['RAW_CONTENT'] = ct['doc']
+        page = data['page']
         try:
             html_output = template.render(**data)
         except:
             print("WARNING: Error when rendering md {}: {}".format(
                 ct['source_file_short'], text_error_template().render()))
             html_output = None
-        if html_output and not data.get('do_not_render', False):
+        if html_output and not page.get('do_not_render', False):
             with open(ct['target'], 'w') as f:
                 f.write(template.render(**data))
             print('[%s] - content: %s' % (
@@ -267,50 +271,64 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                 meta, doc = frontmatter.parse(f.read())
             if meta.get('draft', False) and not conf.get('render_drafts', False):
                 continue
+            # data is global vars, page is specific to this markdown file
             data = {}
             data.update(template_vars)
-            # merge with data from relevant index.yaml files
+            page = {}
+            # load data from relevant index.yaml files
             idata = conf['_index_yaml_data']
             for k in sorted(idata.keys()):
                 if source_file_short.strip('/').startswith(k):
-                    data.update(idata[k])
-            data.update(meta)
+                    page.update(idata[k])
+            page.update(meta)
             # merge with data from 'LOAD' file, if any
-            if 'LOAD' in data:
-                load_path = os.path.join(datadir, data['LOAD'])
+            if 'LOAD' in page:
+                load_path = os.path.join(datadir, page['LOAD'])
                 if os.path.exists(load_path):
                     loaded = {}
                     with open(load_path) as yf:
                         loaded = yaml.safe_load(yf) or {}
                     for k in loaded:
-                        if not k in data:
-                            data[k] = loaded[k]
-            template = data.get('template', data.get('layout', default_template))
+                        if not k in page:
+                            page[k] = loaded[k]
+            # template
+            template = page.get(
+                'template', data.get(
+                    'template', page.get(
+                        'layout', data.get(
+                            'layout', default_template))))
             if not re.search(r'\.\w{2,5}$', template):
                 template += '.mhtml'
-            pretty_path = data.get('pretty_path', default_pretty_path(fn))
+            if not 'template' in page:
+                page['template'] = template
+            # pretty_path
+            pretty_path = page.get(
+                'pretty_path', data.get('pretty_path', default_pretty_path(fn)))
+            if not 'pretty_path' in page:
+                page['pretty_path'] = pretty_path
             # Slug determines destination file
-            if 'slug' in data and re.match(r'^[a-z0-9_-]+$', data['slug']):
-                fn = re.sub(r'[^/]+\.md$', (data['slug']+'.md'), fn)
+            if 'slug' in page and re.match(r'^[a-z0-9_-]+$', page['slug']):
+                fn = re.sub(r'[^/]+\.md$', (page['slug']+'.md'), fn)
             # Ensure that the destination file/dir only contains a limited
             # set of characters
             fn_parts = fn.split('/')
             if re.search(r'[^A-Za-z0-9_.,=-]', fn_parts[-1]):
                 fn_parts[-1] = slugify(fn_parts[-1])
             # Ensure that slug is present
-            if not 'slug' in data:
-                data['slug'] = fn_parts[-1][:-3]
+            if not 'slug' in page:
+                page['slug'] = fn_parts[-1][:-3]
             fn = '/'.join(fn_parts)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)
             target_fn = os.path.join(html_dir, html_fn)
-            data['SELF_URL'] = '' if data.get('do_not_render') \
+            data['SELF_URL'] = '' if page.get('do_not_render') \
                 else target_fn.replace(outputdir, '', 1)
             data['MTIME'] = datetime.datetime.fromtimestamp(
                 os.path.getmtime(source_file))
             data['RENDERER'] = lambda x: render_markdown(x, conf)
             # convert some common datetime strings to datetime objects
-            parse_dates(data)
+            parse_dates(page)
+            data['page'] = attrdict(page)
             content.append({
                 'source_file': source_file,
                 'source_file_short': source_file_short,
@@ -503,6 +521,53 @@ def slugify(s):
     ret = ret.strip('-')
 
     return ret + ext
+
+
+class attrdict(dict):
+    """
+    Dict with the keys as attributes (or member variables), for nicer-looking
+    and more convenient lookups.
+
+    If the encapsulated dict has keys corresponding to the built-in attributes
+    of dict, i.e. one of 'clear', 'copy', 'fromkeys', 'get', 'items', 'keys',
+    'pop', 'popitem', 'setdefault', 'update', or 'values', these will be renamed
+    so as to have a leading underscore.
+
+    An attempt to access a non-existing key as an attribute results in a Mako
+    Undefined object (for ease of usage in Mako templates).
+    """
+    __reserved = dir(dict())
+    __reserved.append('__reserved')
+    __reserved = set(__reserved)
+
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1 and isinstance(args[0], dict) and not kwargs:
+            kwargs = args[0]
+        for k in attrdict.__reserved:
+            if k in kwargs:
+                kwargs['_'+k] = kwargs.pop(k)
+        dict.__init__(self, *args, **kwargs)
+        self.__dict__ = self
+
+    def __setitem__(self, k, v):
+        if k in attrdict.__reserved:
+            super().__setitem__('_'+k, v)
+        else:
+            super().__setitem__(k, v)
+
+    def __setattr__(self, k, v):
+        if k in attrdict.__reserved:
+            super().__setattr__('_'+k, v)
+        else:
+            super().__setattr__(k, v)
+
+    def __getattr__(self, k):
+        if k in attrdict.__reserved:
+            return super().__getattr(k)
+        try:
+            return self.__dict__[k]
+        except KeyError:
+            return Undefined()
 
 
 if __name__ == '__main__':

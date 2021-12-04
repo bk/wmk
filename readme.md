@@ -141,6 +141,8 @@ Markdown content, receive the following context variables:
   (see below).
 - `SELF_URL`: The relative path to the HTML file which the output of the
   template will be written to.
+- `site`: A dict-like object containing the variables specified under the `site`
+  key in `wmk_config.yaml`.
 
 When templates are rendering Markdown content, they additionally get the
 following context variables:
@@ -154,13 +156,14 @@ following context variables:
   which depend on other markdown content which itself may contain shortcodes.
   The callable receives a dict containing the keys `doc` (the markdown) and
   `data` (the context variables) and returns rendered HTML.
-- Whatever is defined in the YAML meta section at the top of the markdown file,
-  in the `template_context` section of `wmk_config.yaml`, as well as in
-  `index.yaml` files in the markdown file directory and its parent directories
-  inside `content`.
+- `page`: A dict-like object containing the variables defined in the YAML meta
+  section at the top of the markdown file, in `index.yaml` files in the markdown
+  file directory and its parent directories inside `content`, and possibly in
+  YAML files from the `data` directory loaded via the `LOAD` directive in the
+  metadata.
 
 For further details on context variables set in the markdown frontmatter and in
-`index.yaml` files, see below under "Frontmatter variables".
+`index.yaml` files, see below under "Site and page variables".
 
 ## Config file
 
@@ -168,8 +171,10 @@ A config file, `$basedir/wmk_config.yaml`, can be used to configure some aspects
 of how `wmk` operates. Currently there is support for the following settings:
 
 - `template_context`: Default values for the context passed to Mako templates.
-  This should be a dict. The values may be overridden by markdown metadata or
-  linked YAML files.
+  This should be a dict.
+
+- `site`: Values for common information relating to the website. See further
+  below, under "Site and page variables".
 
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -248,11 +253,11 @@ Here is an example `csv_table.mc` Mako component that might handle the above
 shortcode call:
 
 ```mako
-<%page args="csvfile, delimiter=',', caption=None, **kwargs"/>
+<%page args="csvfile, delimiter=',', caption=None"/>
 <%! import os, csv %>
 <%
 info = []
-with open(os.path.join(kwargs['DATADIR'], csvfile)) as f:
+with open(os.path.join(context.get('DATADIR'), csvfile.strip('/'))) as f:
     info = list(csv.DictReader(f, delimiter=delimiter))
 if not info:
     return ''
@@ -300,7 +305,7 @@ by the shortcode component.
 
 ### Default shortcodes
 
-The following default shortcodes are provided by `wmk`:
+The following default shortcodes are provided by the `wmk` installation:
 
 - `figure`: An image wrapped in a `<figure>` tag. Accepts the following
   arguments: `src` (the image path or URL), `img_link`, `link_target`,
@@ -334,50 +339,51 @@ The following default shortcodes are provided by `wmk`:
   `css_class`, `autoplay`, `title`.
 
 
-## Frontmatter variables
+## Site and page variables
 
 When a markdown file is rendered, the Mako template receives a number of
-variables as partly described above. A few of these variables, such as
-`MDTEMPLATES` and `DATADIR` are set directly by `wmk` (see above). Others are
-user-configured and set in one of the following places, with the last-mentioned
-sources having the highest priority for any given variable name: (1)
-`wmk_config.yaml`, under the key `template_context`; (2) the cascade of
-`index.yaml` files in the `content` directory and its subdirectories; (3) the
-YAML frontmatter of the markdown file itself. Let us call all of these
-"frontmatter variables" for short, even if they are gathered from this cascade
-of increasingly specific sources.
+context variables as partly described above. A few of these variables, such as
+`MDTEMPLATES` and `DATADIR` set directly by `wmk` (see above). Others are
+user-configured either (1) in `wmk_config.yaml` (the contents of the `site`
+object and potentially additional "global" varaibles in `template_context`); or
+(2) the cascade of `index.yaml` files in the `content` directory and its
+subdirectories along with the YAML frontmatter of the markdown file itself, the
+result of which is placed in the `page` object. 
 
-Before loading the frontmatter of the markdown file itself, `wmk` will thus
-start by looking in `wmk_config.yamk` for whatever is defined in
-`template_context`. Then it will loook for `index.yaml` files in each parent
-directory of the markdown file in question, starting at the root of the
-`content` directory and moving upwards, at each step extending and potentially
-overriding the data gathered at previous stages. Only then will the YAML in the
-frontmatter of the file itself be parsed and added to the data.
+When gathering the content of the `page` variable, `wmk` will
+start by looking for `index.yaml` files in each parent directory of the markdown
+file in question, starting at the root of the `content` directory and moving
+upwards, at each step extending and potentially overriding the data gathered at
+previous stages. Only then will the YAML in the frontmatter of the file itself
+be parsed and added to the `page` data.
 
 At any point, a data source in this cascade may specify an extra YAML file using
 the special `LOAD` variable. This file will then be loaded as well and
-subsequently treated as if the data in it had been specified directly in the
-file with the `LOAD` directive.
+subsequently treated as if the data in it had been specified directly at the
+start of the file containing the `LOAD` directive.
 
 Which variables are defined and used by templates is very much up the user,
 although a few of them have a predefined meaning to `wmk` itself. For making it
-easier to switch between diffent themes it is however suggested to stick to the
-following meaning of some of the variables:
+easier to switch between different themes it is however suggested to stick to
+the following meaning of some of the variables:
 
 ### System variables
 
 The following frontmatter variables affect the operation of `wmk` itself, rather
-than being exclusively handled by templates.
+than being exclusively handled by Mako templates.
 
 #### Templates
 
-- `template` specifies the Mako template which will render the content.
+**Note** that a variable called something like `page.foo` below is referenced as
+such in Mako templates but specified in YAML frontmatter simply as `foo:
+somevalue`.
 
-- `layout` is used by several other static site generators. For compatibility
-  with them, this variable is supported as fallback synonym with `template`.
-  It has no effect unless `template` has not been specified explicitly anywhere
-  in the cascade of frontmatter data sources.
+- `page.template` specifies the Mako template which will render the content.
+
+- `page.layout` is used by several other static site generators. For
+  compatibility with them, this variable is supported as a fallback synonym with
+  `template`.  It has no effect unless `template` has not been specified
+  explicitly anywhere in the cascade of frontmatter data sources.
 
 For both `template` and `layout`, the `.mhtml` extension of the template may be
 omitted. If the `template` value appears to have no extension, `.mhtml` is
@@ -390,7 +396,7 @@ files is `md_base.mhtml`.
 
 #### Affects rendering
 
-- `slug`: If the value of `slug` is nonempty and consists exclusively of
+- `page.slug`: If the value of `slug` is nonempty and consists exclusively of
   lowercase alphanumeric characters, underscores and hyphens (i.e. matches the
   regular expression `^[a-z0-9_-]+$`), then this will be used instead of the
   basename of the markdown file to determine where to write the output.
@@ -399,7 +405,7 @@ files is `md_base.mhtml`.
   be able to depend upon slugs always being present. Note that slugs are not
   guaranteed to be unique, although that is good practice.
 
-- `pretty_path`: If this is true, the basename of the markdown filename (or the
+- `page.pretty_path`: If this is true, the basename of the markdown filename (or the
   slug) will become a directory name and the HTML output will be written to
   `index.html` inside that directory. By default it is false for files named
   `index.md` and true for all other files. If the filename contains symbols that
@@ -407,13 +413,13 @@ files is `md_base.mhtml`.
   final processing (although this only works for languages using the Latin
   alphabet).
 
-- `do_not_render`: Tells `wmk` not to write the output of this template to a
-  file in `htdocs`. All other processing will be done, so the gathered information
-  can be used by templates for various purposes. (This is similar to the
-  `headless` setting in Hugo).
+- `page.do_not_render`: Tells `wmk` not to write the output of this template to
+  a file in `htdocs`. All other processing will be done, so the gathered
+  information can be used by templates for various purposes. (This is similar to
+  the `headless` setting in Hugo).
 
-- `draft`: If this is true, it prevents further processing of the markdown file
-  unless `render_drafts` has been set to true in the config file.
+- `page.draft`: If this is true, it prevents further processing of the markdown
+  file unless `render_drafts` has been set to true in the config file.
 
 Note that if two files in the same directory have the same slug, they may both
 be rendered to the same output file; it is unpredictable which of them will go
@@ -428,44 +434,74 @@ The following variables are not used directly by `wmk` but affect templates in
 different ways. It is a list of recommendations rather than something which
 must be followed at all costs.
 
+#### Typical site variables
+
+Site variables are the keys-value pairs under `site:` in `wmk_config.yaml`.
+
+- `site.title`: Name or title of the site.
+
+- `site.lang`: Language code, e.g. 'en' or 'en-us'.
+
+- `site.tagline`: Subtitle or slogan.
+
+- `site.description`: Site description.
+
+- `site.author`: Main author/proprietor of the site. Depending on the site
+  templates (or the theme), may be a string or a dict with keys such as "name",
+  "email", etc.
+
+- `site.base_url`: The protocol and hostname of the site (perhaps followed by a
+  directory path if `site.leading_path` is not being used). Normally without a
+  trailing slash.
+
+- `site.leading_path`: If the web pages built by `wmk` are not at the root of
+  the website but in a subdirectory, this is the appropriate prefix path.
+  Normally without a trailing slash.
+
+Templates or themes may be configurable through various site variables, e.g.
+`site.paginate` for number of items per page in listings or `site.mainfont` for
+configuring the font family.
+
 #### Classic meta tags
 
 These variables mostly relate to the text content and affect the metadata
 section of the `<head>` of the HTML page.
 
-- `title`: The title of the page, typically placed in the `<title>` tag in the
+- `page.title`: The title of the page, typically placed in the `<title>` tag in the
   `<head>` and used as a heading on the page. Normally the title should not be
-  repeated as a header in the body of the markdown file.
+  repeated as a header in the body of the markdown file. Most markdown documents
+  should have a title.
 
-- `description`: Affects the `<meta name="description" ...>` tag in the `<head>`
+- `page.description`: Affects the `<meta name="description" ...>` tag in the `<head>`
   of the page. The variable `summary` (see later) may also be used as fallback
   here.
 
-- `keywords`: Affects the `<meta name="keywords" ...>` tag in the `<head>`
+- `page.keywords`: Affects the `<meta name="keywords" ...>` tag in the `<head>`
   of the page. This may be either a list or a string (where items are separated
   with commas).
 
-- `robots`: Instructions for Google and other search engines (e.g. `noindex,
-  nofollow`) should be placed in this variable.
+- `page.robots`: Instructions for Google and other search engines relating to
+  this content (e.g. `noindex, nofollow`) should be placed in this variable.
 
-- `author`: The name of the author (if there is only one). May lead to `<meta
+- `page.author`: The name of the author (if there is only one). May lead to `<meta
   name="keywords" ...>` tag in the `<head>` as well as appear in the body of the
-  rendered HTML file.
+  rendered HTML file. Some themes may expect this to be a dict with keys such
+  as `name`, `email`, `image`, etc.
 
-- `authors`: If there are many authors they may be specified here as a list.
+- `page.authors`: If there are many authors they may be specified here as a list.
   It is up to the template how to handle it if both `author` and `authors` are
   specified, but one way is to add the `author` to the `authors` unless already
   present in the list.
 
-- `summary`: This may affect the `<meta name="description" ...>` tag as a
+- `page.summary`: This may affect the `<meta name="description" ...>` tag as a
   fallback if no `description` is provided, but its main purpose is for list
   pages with article teasers and similar content.
 
 Note that this is by no means an exhaustive list of variables likely to affect
 the `<head>` of the page. Notably, several other variables may affect meta tags
-used for sharing on social media. The most common is probably `image` (described
-below). In any case, the implementation itself is up to the theme or template
-author.
+used for sharing on social media. The most common is probably `page.image`
+(described below). In any case, the implementation itself is up to the theme or
+template author.
 
 #### Dates
 
@@ -477,56 +513,51 @@ seconds may be omitted. If these rules are followed, the following variables
 are converted to date or datetime objects (depending on the length of the
 string) before they are passed on to templates.
 
-- `date`: A generic date or datetime associated with the document.
+- `page.date`: A generic date or datetime associated with the document.
 
-- `pubdate`: The date/datetime when first published. Currently `wmk` does not
+- `page.pubdate`: The date/datetime when first published. Currently `wmk` does not
   skip files with `pubdate` in the future, but it may do so in a later version.
 
-- `modified_date`: The last-modified date/datetime. Note that `wmk` will also
+- `page.modified_date`: The last-modified date/datetime. Note that `wmk` will also
   add the variable `MTIME`, which is the modification time of the file
   containing the markdown source, so this information can be inferred from
   that if this variable is not explicitly specified.
 
-- `created_date`: The date the document was first created.
+- `page.created_date`: The date the document was first created.
 
-- `expire_date`: The date from which the document should no longer be published.
-  Similarly to `pubdate`, this currently has no effect on `wmk` but may do so in
-  a later version.
+- `page.expire_date`: The date from which the document should no longer be published.
+  Similarly to `pubdate`, this currently has no direct effect on `wmk` but may
+  do so in a later version.
 
 #### Media content
 
-- `image`: The main image associated with the document. Affects the `og:image`
+- `page.image`: The main image associated with the document. Affects the `og:image`
   meta tag in HTML output and may be used for both teasers and content rendering.
 
-- `images`: A list of images associated with the document. If `image` is not
+- `page.images`: A list of images associated with the document. If `image` is not
   specified, the main image will be taken to be the first in the list.
 
-- `audio`: A list of audio files/urls associated with this document.
+- `page.audio`: A list of audio files/urls associated with this document.
 
-- `videos`: A list of video files/urls associated with this document.
+- `page.videos`: A list of video files/urls associated with this document.
 
-- `attachments`: A list of attachments (e.g. PDF files) associated with this
+- `page.attachments`: A list of attachments (e.g. PDF files) associated with this
   document.
 
 #### Taxonomy
 
-- `section`: One of a quite small number of sections on the site, often
+- `page.section`: One of a quite small number of sections on the site, often
   corresponding to the leading subdirectory in `content`. E.g.  "blog", "docs",
   "products".
 
-- `categories`: A list of broad categories the page belongs to. E.g. "Art",
+- `page.categories`: A list of broad categories the page belongs to. E.g. "Art",
   "Science", "Food". The first-named category may be regarded as the primary
   one.
 
-- `tags`: A list of tags relevant to the content of the page. E.g. "quantum
+- `page.tags`: A list of tags relevant to the content of the page. E.g. "quantum
   physics", "knitting", "Italian food".
 
-- `weight`: A measure of importance attached to a page and used as an ordering
+- `page.weight`: A measure of importance attached to a page and used as an ordering
   key for a list of pages. This should be a positive integer. The list is
   normally ascending, i.e. with the lower numbers at the top. (Pages may of
   course be ordered by other criteria, e.g. by `pubdate`).
-
-You should avoid having subdirectories named `categories` (or `category`) and
-`tags` (or `tag`) in your `content` directory since it is likely that list
-templates will be writing HTML content to the corresponding directories in
-`htdocs`.

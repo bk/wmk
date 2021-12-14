@@ -444,12 +444,15 @@ def get_newest_ts_of_dir(src):
 
 def parse_argstr(argstr):
     "Parse a string representing the arguments part of a function call."
-    fake = 'f({})'.format(argstr)
-    tree = ast.parse(fake)
-    funccall = tree.body[0].value
-    args = [ast.literal_eval(arg) for arg in funccall.args]
-    kwargs = {arg.arg: ast.literal_eval(arg.value) for arg in funccall.keywords}
-    return args, kwargs
+    try:
+        fake = 'f({})'.format(argstr)
+        tree = ast.parse(fake)
+        funccall = tree.body[0].value
+        args = [ast.literal_eval(arg) for arg in funccall.args]
+        kwargs = {arg.arg: ast.literal_eval(arg.value) for arg in funccall.keywords}
+        return args, kwargs
+    except:
+        raise Exception("Could not parse argstr: {}".format(argstr))
 
 
 def mako_shortcode(conf, ctx, nth=None):

@@ -223,7 +223,7 @@ Currently there are three wmk themes available:
   template by [HTML5 UP][html5up]. [Demo][hdemo].
 
 - [Picompany][pcomp], a general-purpose theme based on the [Company][company]
-  template that forms part of the [PicoCSS][pico] documentation. [Demo][pdemo].
+  template that accompanies the [PicoCSS][pico] documentation. [Demo][pdemo].
 
 [lanyonesque]: https://github.com/bk/lanyonesque
 [lanyon]: https://github.com/poole/lanyon
@@ -235,7 +235,7 @@ Currently there are three wmk themes available:
 [pcomp]: https://github.com/bk/picompany
 [company]: https://picocss.com/examples/company/
 [pico]: https://picocss.com/
-[pdemo]: https://pico-company.baldr.net/
+[pdemo]: https://picompany.baldr.net/
 
 ## Shortcodes
 

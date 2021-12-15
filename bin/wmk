@@ -8,19 +8,32 @@ SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
 ACTION="$1"
 BASEDIR="$2"
-FORCE="$3"
+FORCE=""
+SERVEPORT=""
+SERVEIP=""
 WMK_CONF="$BASEDIR/wmk_config.yaml"
 
 . $WMK_HOME/venv/bin/activate
 
-case "$FORCE" in
-    -f|--force)
-        FORCE=--force
-        ;;
-    *)
-        FORCE=""
-        ;;
-esac
+while [[ "$#" > 0 ]]; do
+    case $1 in
+        -p|--port)
+            SERVEPORT="$2"
+            shift; shift
+            ;;
+        -i|--ip)
+            SERVEIP="$2"
+            shift; shift
+            ;;
+        -f|--force)
+            FORCE=--force
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 wmk_http_conf(){
     if test -f "$WMK_CONF"
@@ -31,12 +44,30 @@ wmk_http_conf(){
     fi
 }
 
+usage(){
+    echo "wmk - a static site builder"
+    echo "Usage:"
+    echo "  wmk build|watch <dirname> [-f|--force]"
+    echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
+    echo "  wmk info|env|debug <dirname>"
+    echo "Action abbrevs: b|r|run=build; w=watch; s=serve"
+    echo "See $WMK_HOME/readme.md for documentation"
+}
+
 if test -d "$BASEDIR"
 then
     case "$ACTION" in
         s|srv|serve)
-            IP=$(wmk_http_conf ip 127.0.0.1)
-            PORT=$(wmk_http_conf port 7007)
+            if [ "$SERVEIP" == "" ]; then
+                IP=$(wmk_http_conf ip 127.0.0.1)
+            else
+                IP=$SERVEIP
+            fi
+            if [ "$SERVEPORT" == "" ]; then
+                PORT=$(wmk_http_conf port 7007)
+            else
+                PORT=$SERVEPORT
+            fi
             python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/htdocs"
             ;;
         r|b|run|build)
@@ -45,9 +76,8 @@ then
         w|watch)
             cd "$BASEDIR"
             while true; do
-                $WMK_HOME/wmk.py "$BASEDIR" "$FORCE"
-                inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r assets data content static templates
-                sleep 1
+                inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r .
+                $WMK_HOME/wmk.py "$BASEDIR" --force
             done
             ;;
         debug|env|info)
@@ -56,14 +86,11 @@ then
             echo "  - work directory: $(realpath "$BASEDIR")"
             ;;
         *)
-            echo "Usage: wmk serve|run|watch|info dirname [-f|--force]"
-            echo "See $WMK_HOME/readme.md for documentation"
+            usage
             exit 1
             ;;
     esac
 else
-    echo "Usage: wmk serve|run|watch|info dirname [-f|--force]"
-    # echo "Need a basedir as second argument"
-    echo "See $WMK_HOME/readme.md for documentation"
+    usage
     exit 1
 fi

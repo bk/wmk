@@ -33,8 +33,14 @@ def main(basedir=None, force=False):
     basedir = os.path.realpath(basedir)
     if not os.path.isdir(basedir):
         raise Exception('{} is not a directory'.format(basedir))
+    if not os.path.exists(os.path.join(basedir, 'wmk_config.yaml')):
+        print(
+            'ERROR: {} does not contain a wmk_config.yaml'.format(
+                basedir))
+        sys.exit(1)
     dirs = get_dirs(basedir)
     ensure_dirs(dirs)
+    sys.path.insert(0, dirs['python'])
     conf = get_config(basedir)
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
@@ -46,6 +52,8 @@ def main(basedir=None, force=False):
     if themedir and os.path.exists(os.path.join(themedir, 'static')):
         os.system("rsync -a %s/ %s/" % (
             os.path.join(themedir, 'static'), dirs['output']))
+    if themedir and os.path.exists(os.path.join(themedir, 'py')):
+        sys.path.insert(1, os.path.join(themedir, 'py'))
     os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
@@ -71,7 +79,9 @@ def main(basedir=None, force=False):
     # Add wmk_home templates for "built-in" shortcodes
     wmk_home = os.path.dirname(os.path.realpath(__file__))
     lookup_dirs.append(os.path.join(wmk_home, 'templates'))
-    lookup = TemplateLookup(directories=lookup_dirs)
+    lookup = TemplateLookup(
+        directories=lookup_dirs,
+        imports=conf.get('mako_imports', None))
     conf['_lookup'] = lookup
     # 3) get info about stand-alone templates and Markdown content
     templates = get_templates(
@@ -99,6 +109,7 @@ def get_dirs(basedir):
         'assets': basedir + '/assets', # only scss for now
         'data': basedir + '/data', # YAML, potentially sqlite
         'themes': basedir + '/themes', # extra static/assets/templates
+        'python': basedir + '/py', # python modeles available to Mako templates
     }
 
 

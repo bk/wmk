@@ -45,10 +45,10 @@ file organization.
   the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
   and `debug`.
 
-- `wmk run $basedir [-f|--force]`: Compiles/copies files into `$basedir/htdocs`.
+- `wmk build $basedir [-f|--force]`: Compiles/copies files into `$basedir/htdocs`.
   If `-f` or `--force` is specified as the third argument, no timestamp checking
   is done, resulting in all files being re-processed. Synonyms for `run` are
-  `build`, `b` and `r`.
+  `run`, `b` and `r`.
 
 - `wmk watch $basedir [-f|--force]`: Watches for changes in the source
   directories inside `$basedir` and recompiles if changes are detected.  If `-f`
@@ -56,8 +56,9 @@ file organization.
   whenever a potential change triggers a rerun of `wmk run`, thus ensuring that
   all files will be re-processed. A synonym for `watch` is `w`.
 
-- `wmk serve $basedir`: Serves the files in `$basedir/htdocs` on
-  `http://localhost:7007/` (the IP and port are configurable via
+- `wmk serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Serves the
+  files in `$basedir/htdocs` on `http://127.0.0.1:7007/` by default. The IP and
+  port can be modified with the `-p` and `-i` switches or be be configured via
   `wmk_config.yaml` – see below). Synonyms for `serve` are `srv` and `s`.
 
 ## File organization
@@ -88,6 +89,11 @@ content and output. They will be created if they do not exist:
   context variables, see below.
 
 - `data`: YAML files for additional metadata.
+
+- `py`: Directory for Python files. This directory is automatically added to the
+  front of `sys.path` before Mako is initialized, meaning that Mako templates
+  can import modules placed here. Implicit imports are possible by setting
+  `mako_imports` in the config file (see below).
 
 - `assets`: Assets for an asset pipeline. Currently this only handles SCSS/Sass
   files in the subdirectory `scss`. They will be compiled to CSS which is placed
@@ -168,13 +174,15 @@ For further details on context variables set in the markdown frontmatter and in
 ## Config file
 
 A config file, `$basedir/wmk_config.yaml`, can be used to configure some aspects
-of how `wmk` operates. Currently there is support for the following settings:
+of how `wmk` operates. It must exist (but may be empty). Currently there is
+support for the following settings:
 
 - `template_context`: Default values for the context passed to Mako templates.
   This should be a dict.
 
-- `site`: Values for common information relating to the website. See further
-  below, under "Site and page variables".
+- `site`: Values for common information relating to the website. These are also
+  added to the template context under the key `site`. See further below, under
+  "Site and page variables".
 
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -194,9 +202,12 @@ of how `wmk` operates. Currently there is support for the following settings:
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
   (default: 127.0.0.1).
 
+- `mako_imports`: A list of Python statements to add to the top of each
+  generated Mako template module file. Generally these are import statements.
+
 - `theme`: This is the name of a subdirectory to the directory `$basedir/themes`
-  (or a symlink placed there) in which to look for extra `static`, `assets` and
-  `template` directories. Note that neither `content` nor `data` directories
+  (or a symlink placed there) in which to look for extra `static`, `assets`, `py`
+  and `template` directories. Note that neither `content` nor `data` directories
   of a theme will be used by `wmk`. A theme-provided template may be rendered as
   stand-alone page, but only if no local template overrides it (i.e. has the
   same relative path). Mako's internal template lookup will similarly first look

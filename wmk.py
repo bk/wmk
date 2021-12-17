@@ -50,11 +50,11 @@ def main(basedir=None, force=False):
     if themedir and not os.path.exists(themedir):
         themedir = None
     if themedir and os.path.exists(os.path.join(themedir, 'static')):
-        os.system("rsync -a %s/ %s/" % (
+        os.system('rsync -a "%s/" "%s/"' % (
             os.path.join(themedir, 'static'), dirs['output']))
     if themedir and os.path.exists(os.path.join(themedir, 'py')):
         sys.path.insert(1, os.path.join(themedir, 'py'))
-    os.system("rsync -a %s/ %s/" % (dirs['static'], dirs['output']))
+    os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
     process_assets(

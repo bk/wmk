@@ -13,9 +13,9 @@ SERVEPORT=""
 SERVEIP=""
 WMK_CONF="$BASEDIR/wmk_config.yaml"
 
-. $WMK_HOME/venv/bin/activate
+. "$WMK_HOME/venv/bin/activate"
 
-while [[ "$#" > 0 ]]; do
+while [[ "$#" -gt 0 ]]; do
     case $1 in
         -p|--port)
             SERVEPORT="$2"
@@ -36,11 +36,11 @@ while [[ "$#" > 0 ]]; do
 done
 
 wmk_http_conf(){
-    if test -f "$WMK_CONF"
+    if test -s "$WMK_CONF"
     then
         python3 -c "import yaml;c=yaml.safe_load(open('$WMK_CONF'));print(c.get('http',{}).get('$1','$2'));"
     else
-        echo $2
+        echo "$2"
     fi
 }
 
@@ -68,22 +68,32 @@ then
             else
                 PORT=$SERVEPORT
             fi
+            if [[ ! -e "$BASEDIR/wmk_config.yaml" ]]; then
+                echo "WARNING: wmk_config.yaml not found!"
+            fi
+            if [[ ! -e "$BASEDIR/htdocs" ]]; then
+                echo "WARNING: no $(realpath "$BASEDIR")/htdocs found!"
+            fi
             python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/htdocs"
             ;;
         r|b|run|build)
-            $WMK_HOME/wmk.py "$BASEDIR" "$FORCE"
+            "$WMK_HOME/wmk.py" "$BASEDIR" "$FORCE"
             ;;
         w|watch)
-            cd "$BASEDIR"
+            cd "$BASEDIR" || exit 1
             while true; do
                 inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r .
-                $WMK_HOME/wmk.py "$BASEDIR" --force
+                "$WMK_HOME/wmk.py" "$BASEDIR" --force
             done
             ;;
         debug|env|info)
             echo "WMK ENVIRONMENT:"
             echo "  - wmk home: $WMK_HOME"
-            echo "  - work directory: $(realpath "$BASEDIR")"
+            if [[ -e "$BASEDIR/wmk_config.yaml" ]]; then
+                echo "  - project directory: $(realpath "$BASEDIR")"
+            else
+                echo "  - WARNING: $(realpath "$BASEDIR") has no wmk_config.yaml!"
+            fi
             ;;
         *)
             usage

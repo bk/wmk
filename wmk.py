@@ -14,7 +14,7 @@ import markdown
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
-from mako.exceptions import text_error_template
+from mako.exceptions import text_error_template, TemplateLookupException
 from mako.runtime import Undefined
 
 
@@ -67,7 +67,7 @@ def main(basedir=None, force=False):
         'CONTENTDIR': os.path.realpath(dirs['content']),
         'WEBROOT': os.path.realpath(dirs['output']),
         'TEMPLATES': [],
-        'MDCONTENT': [],
+        'MDCONTENT': MDContentList([]),
     }
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
@@ -165,7 +165,14 @@ def process_markdown_content(content, lookup, conf, force):
     for ct in content:
         if not force and is_older_than(ct['source_file'], ct['target']):
             continue
-        template = lookup.get_template(ct['template'])
+        try:
+            template = lookup.get_template(ct['template'])
+        except TemplateLookupException:
+            if not '/' in ct['template']:
+                template = lookup.get_template('base/' + ct['template'])
+                ct['template'] = 'base/' + ct['template']
+            else:
+                raise
         maybe_mkdir(ct['target'])
         data = ct['data']
         # Since 'pre_render' was dropped, this condition should always be true.
@@ -328,18 +335,24 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
             # Ensure that slug is present
             if not 'slug' in page:
                 page['slug'] = fn_parts[-1][:-3]
+            # Ensure that title is present
+            if not 'title' in page:
+                page['title'] = re.sub(r'[-_]', ' ', page['slug'])
+                page['title'] = re.sub(r'^[0-9 ]+', '', page['title']).strip() or '??'
             fn = '/'.join(fn_parts)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)
             target_fn = os.path.join(html_dir, html_fn)
             data['SELF_URL'] = '' if page.get('do_not_render') \
                 else target_fn.replace(outputdir, '', 1)
+            data['SELF_TEMPLATE'] = template
             data['MTIME'] = datetime.datetime.fromtimestamp(
                 os.path.getmtime(source_file))
             data['RENDERER'] = lambda x: render_markdown(x, conf)
             # convert some common datetime strings to datetime objects
             parse_dates(page)
             data['page'] = attrdict(page)
+            data['DATE'] = preferred_date(data)
             content.append({
                 'source_file': source_file,
                 'source_file_short': source_file_short,
@@ -350,10 +363,22 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf):
                 'url': data['SELF_URL'],
             })
             content[-1]['rendered'] = render_markdown(content[-1], conf)
+    content = MDContentList(content)
     template_vars['MDCONTENT'] = content
     for it in content:
         it['data']['MDCONTENT'] = content
     return content
+
+
+def preferred_date(data):
+    """
+    Pick a date by priority among several date keys in `page`, with `MTIME` as
+    fallback. This will be set as the `DATE` key.
+    """
+    for k in KNOWN_DATE_KEYS:
+        if k in data['page']:
+            return data['page'][k]
+    return data['MTIME']
 
 
 def parse_dates(data):
@@ -582,6 +607,151 @@ class attrdict(dict):
             return self.__dict__[k]
         except KeyError:
             return Undefined()
+
+
+class MDContentList(list):
+    """
+    Filterable MDCONTENT, for ease of list components.
+    """
+
+    def match_entry(self, pred):
+        """
+        Filter by all available info: source_file, source_file_short, target,
+        template, data (i.e. template_context), doc (markdown source),
+        url, rendered (html fragment, i.e. CONTENT).
+        """
+        return MDContentList([_ for _ in self if pred(_)])
+
+    def match_ctx(self, pred):
+        "Filter by template context (page, site, MTIME, SELF_URL, etc.)"
+        return MDContentList([_ for _ in self if pred(_['data'])])
+
+    def match_page(self, pred):
+        "Filter by page variables"
+        return MDContentList([_ for _ in self if pred(_['data']['page'])])
+
+    def match_doc(self, pred):
+        "Filter by Markdown body"
+        return MDContentList([_ for _ in self if pred(_['doc'])])
+
+    def sorted_by(self, key, reverse=False, default_val=-1):
+        k = lambda x: x['data']['page'].get(key, default_val)
+        return MDContentList(sorted(self, key=k, reverse=reverse))
+
+    def sorted_by_date(self, newest_first=True, date_key='DATE'):
+        k = lambda x: str(
+            x['data'][date_key]
+              if date_key in ('DATE', 'MTIME') \
+              else x['data']['page'].get(date_key, x['data']['DATE']))
+        return MDContentList(sorted(self, key=k, reverse=newest_first))
+
+    def sorted_by_title(self, reverse=False, default_val='ZZZ'):
+        return self.sorted_by('title', reverse=reverse, default_val=default_val)
+
+    def in_date_range(self, start, end, date_key='DATE'):
+        def found(x):
+            pg = x['page']
+            date = data[date_key] if date_key in ('DATE', 'MTIME') else pg.get(date_key, data['DATE'])
+            return str(start) <= str(date) <= str(end)
+        return self.match_ctx(found)
+
+    def posts(self, ordered=True):
+        """
+        Posts, i.e. blog entries, are defined as content in specific directories
+        (posts, blog) or having a 'type' attribute of 'post', 'blog',
+        'blog-entry' or 'blog_entry'.
+        """
+        is_post = lambda x: (x['source_file_short'].strip('/').startswith(('posts/', 'blog/'))
+                             or x['data']['page'].get('type', '') in (
+                                 'post', 'blog', 'blog-entry', 'blog_entry'))
+        ret = self.match_entry(is_post)
+        return ret.sorted_by_date() if ordered else ret
+
+    def url_match(self, url_pred):
+        return self.match_entry(lambda x: urlpred(x['url']))
+
+    def path_match(self, src_pred):
+        return self.match_entry(lambda x: src_pred(x['source_file_short']))
+
+    def has_taxonomy(self, haystack_keys, needles):
+        if not needles:
+            return MDContentList([])
+        if not isinstance(needles, (list, tuple)):
+            needles = [needles]
+        needles = [_.lower() for _ in needles]
+        def found(x):
+            for k in haystack_keys:
+                if k in x:
+                    if isinstance(x[k], (list, tuple)):
+                        for _ in x[k]:
+                            if _.lower() in needles:
+                                return True
+                    elif x[k].lower() in needles:
+                        return True
+            return False
+        return self.match_page(found)
+
+    def in_category(self, catlist):
+        return self.has_taxonomy(['category', 'categories'], catlist)
+
+    def has_tag(self, taglist):
+        return self.has_taxonomy(['tag', 'tags'], taglist)
+
+    def in_section(self, sectionlist):
+        return self.has_taxonomy(['section', 'sections'], sectionlist)
+
+    def paginate(self, pagesize=5, context=None):
+        """
+        Divides the page list into chunks of size `pagesize` and returns
+        a tuple consisting of the chunks and a list of page_urls (one for each
+        page, in order).  If an appropriate template context is provided, pages
+        2 and up will be written to the webroot output directory. Without the
+        context, the page_urls will be None.
+        NOTE: It is the responsibility of the calling template to check the
+        '_page' variable for the current page to be rendered (this defaults to
+        1). Each iteration will get all chunks and must use this variable to
+        limit itself appriopriately.
+        """
+        page_urls = None
+        chunks = [self[i:i+pagesize] for i in range(0, len(self), pagesize)] or [[]]
+        if len(chunks) < 2:
+            # We only have one page -- no need to do anything further
+            if context:
+                page_urls = [context.get('SELF_URL')]
+            return (chunks, page_urls)
+        elif context:
+            # We have the context and can thus write the output for pages 2 and up.
+            # We need the template, the template lookup object, the _page, the
+            # webroot and the self_url of the caller.
+            curpage = int(context.get('_page', 1))
+            self_url = context.get('SELF_URL')
+            page_urls = [self_url]
+            if self_url.endswith('/'):
+                self_url += 'index.html'
+            # TODO: make url/output path configurable (creating directories if needed)
+            url_pat = re.sub(r'\.html$', r'__page_{}.html', self_url)
+            for i in range(2, len(chunks)+1):
+                page_urls.append(url_pat.format(i))
+            if curpage == 1:
+                # So as only to write the output once, we do it for all pages > 1
+                # only on page 1.
+                self_tpl = context.get('SELF_TEMPLATE')
+                webroot = context.get('WEBROOT')
+                page_template = context.lookup.get_template(self_tpl)
+                for pg in range(2, len(chunks)+1):
+                    kw = dict(**context.kwargs)
+                    kw['_page'] = pg
+                    output_fn = os.path.join(webroot, url_pat.format(pg).strip('/'))
+                    with open(output_fn, 'w') as fpg:
+                        fpg.write(page_template.render(**kw))
+            return (chunks, page_urls)
+        else:
+            # We cannot write output since we lack context.
+            # Return all chunks along with their length. A page_urls value of
+            # None mean that the caller must take care of writing the output
+            # (and that all chunks are present in the
+            # first item in the return value).
+            return (chunks, None)
 
 
 if __name__ == '__main__':

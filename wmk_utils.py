@@ -138,8 +138,8 @@ class MDContentList(list):
               else x['data']['page'].get(date_key, x['data']['DATE']))
         return MDContentList(sorted(self, key=k, reverse=newest_first))
 
-    def sorted_by_title(self, reverse=False, default_val='ZZZ'):
-        return self.sorted_by('title', reverse=reverse, default_val=default_val)
+    def sorted_by_title(self, reverse=False):
+        return self.sorted_by('title', reverse=reverse, default_val='ZZZ')
 
     def in_date_range(self, start, end, date_key='DATE'):
         def found(x):

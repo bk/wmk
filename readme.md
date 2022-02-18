@@ -86,7 +86,10 @@ content and output. They will be created if they do not exist:
   Mako template as a string in the context variable `CONTENT`, along with other
   metadata. A YAML datasource can be specified in the metadata block as `LOAD`;
   the data in this file will be added to the context. For further details on the
-  context variables, see below.
+  context variables, see below. Files that have other extensions than `.md` or
+  `.yaml` will be copied directly over to the (appropriate subdirectory of the)
+  `htdocs` directory. This is so as to enable "bundling", i.e. keeping images
+  together with related markdown files.
 
 - `data`: YAML files for additional metadata.
 
@@ -134,8 +137,8 @@ Markdown content, receive the following context variables:
   to the source template), `src_path` (full path to the source template),
   `target` (full path of the file to be written), and `url` (relative url to the
   file to be written).
-- `MDCONTENT`: A list representing all the markdown files which will potentially
-  be rendered by a template. Each item in the list contains the keys
+- `MDCONTENT`: An `MDContentList` representing all the markdown files which will
+  potentially be rendered by a template. Each item in the list contains the keys
   `source_file`, `source_file_short` (truncated and full paths to the source),
   `target` (html file to be written), `template` (filename of the template which
   will be used for rendering), `data` (most of the context variables seen by
@@ -143,10 +146,14 @@ Markdown content, receive the following context variables:
   value for this content – see below). If the configuration setting `pre_render`
   is True, then `rendered` (the HTML produced by converting the markdown) is
   present as well. Note that `MDCONTENT` is not available inside shortcodes.
+  An `MDContentList` is a list object with some convenience methods for
+  filtering and sorting. It is described at the end of this Readme file.
 - Whatever is defined under `template_context` in the `wmk_config.yaml` file
   (see below).
 - `SELF_URL`: The relative path to the HTML file which the output of the
   template will be written to.
+- `SELF_TEMPLATE`: The path to the current template file (from the template
+  root).
 - `site`: A dict-like object containing the variables specified under the `site`
   key in `wmk_config.yaml`.
 
@@ -157,6 +164,10 @@ following context variables:
 - `RAW_CONTENT`: The original markdown source.
 - `MTIME`: A datetime object representing the modification time for the markdown
   file.
+- `DATE`: A datetime object representing the first found value of `date`,
+  `pubdate`, `modified_date`, `expire_date`, or `created_date` found in the YAML
+  front matter, or the `MTIME` value as a fallback. Since this is guaranteed to
+  be present, it is natural to use it for sorting and generic display purposes.
 - `RENDERER`: A callable which enables a template to render markdown in `wmk`'s
   own environment. This is mainly so that it is possible to support shortcodes
   which depend on other markdown content which itself may contain shortcodes.
@@ -403,6 +414,15 @@ although a few of them have a predefined meaning to `wmk` itself. For making it
 easier to switch between different themes it is however suggested to stick to
 the following meaning of some of the variables:
 
+The variables `site` and `page` are dicts with a thin convenience layer on top
+which makes it possible to reference subkeys belonging to them in templates
+using dot notation rather than subscripts. For instance, if `page` has a dict
+variable named `foo`, then a template could contain a fragment such as
+`${ page.foo.bar or 'splat' }` -- even if the `foo` dict does not contain a key
+named `bar`. Without this syntactic sugar you would have to write something much
+more defensive and long-winded such as  `${ page.foo.bar if page.foo and 'bar'
+in page.foo else 'splat' }`.
+
 ### System variables
 
 The following frontmatter variables affect the operation of `wmk` itself, rather
@@ -425,6 +445,11 @@ For both `template` and `layout`, the `.mhtml` extension of the template may be
 omitted. If the `template` value appears to have no extension, `.mhtml` is
 assumed; but if the intended template file has a different extension, then it
 of course cannot be omitted.
+
+Likewise, a leading `base/` directory may be omitted when specifying `template`
+or `layout`. For instance, a `layout` value of `post` would find the template
+file `base/post.mhtml` unless a `post.mhtml` file exists in the template root
+somewhere in the template search path.
 
 If neither `template` nor `layout` has been specified and no `default_template`
 setting is found in `wmk_config.yaml`, the default template name for markdown
@@ -565,6 +590,8 @@ string) before they are passed on to templates.
   Similarly to `pubdate`, this currently has no direct effect on `wmk` but may
   do so in a later version.
 
+See also the description of the `DATE` and `MTIME` context variables above.
+
 #### Media content
 
 - `page.image`: The main image associated with the document. Affects the `og:image`
@@ -597,3 +624,168 @@ string) before they are passed on to templates.
   key for a list of pages. This should be a positive integer. The list is
   normally ascending, i.e. with the lower numbers at the top. (Pages may of
   course be ordered by other criteria, e.g. by `pubdate`).
+
+## Template filters
+
+In addition to the [built-in template
+filters](https://docs.makotemplates.org/en/latest/filtering.html) provided by
+Mako, the following filters are by default made available in templates:
+
+- `date`: date formatting using strftime. By default, the format '%c' is used.
+  A different format is specified using the `fmt` parameter, e.g.:
+  `${ page.pubdate | date(fmt=site.date_format) }`.
+
+- `date_to_iso`: Format a datetime as ISO 8601 (or similarly, depending on
+  parameters). The parameters are `sep` (the separator between the date part and
+  the time part; by default 'T', but a space is sensible as well); `upto` (by
+  default 'sec', but 'day',  'hour' and 'frac' are also acceptable values); and
+  `with_tz` (by default False).
+
+- `date_to_rfc822`: Format a datatime as RFC 822 (a common datetime format in
+  email headers and some types of XML documents).
+
+- `date_short`: E.g. "7 Nov 2022".
+
+- `date_short_us`: E.g. "Nov 7th, 2022".
+
+- `date_long`: E.g. "7 November 2022".
+
+- `date_long_us`: E.g. "November 7th, 2022".
+
+- `slugify`: Turns a string into a slug. Only works for strings in the Latin
+  alphabet.
+
+- `markdownify`: Convert Markdown to HTML. It is possible to specify custom
+  extensions using the `extensions` argument.
+
+- `truncate`: Convert markdown/html to plaintext and return the first `length`
+  characters (default: 200), with an `ellipsis` (default: "…") appended if any
+  shortening has taken place.
+
+- `truncate_words`: Convert markdown/html to plaintext and return the first
+  `length` words (default: 25), with an `ellipsis` (default "…") appended if any
+  shortening has taken place.
+
+- `p_unwrap`: Remove a wrapping `<p>` tag if and only if there is only one
+  paragraph of text. Suitable for short pieces of text to which a markdownify
+  filter has previously been applied. Example: `<h1>${ page.title |
+  markdownify,p_unwrap }</h1>`.
+
+- `strip_html`: Remove any markdown/html markup from the text. Paragraphs will
+  not be preserved.
+
+If you wish to provide additional filters without having to explicitly define or
+import them in templates, the best way of doing this his to add them via the
+`mako_imports` setting in `wmk_config.yaml` (see above).
+
+Please note that in order to avoid conflicts with the above filters you should
+not place a file named `wmk_mako_filters.py` in your `py/` directories.
+
+## MDContentList
+
+Templates which render a list of content files (e.g. a list of blog posts or
+pages belonging to a category) will need to filter or sort `MDCONTENT`
+accordingly. In order to make this easier, `MDCONTENT` is wrapped in a list-like
+object called `MDContentList`, which has the following methods:
+
+### General searching/filtering
+
+Each of the following methods returns a new `MDContentList` containing those
+entries for which the predicate (`pred`) is True.
+
+- `match_entry(self, pred)`: The `pred` (i.e. predicate) is a callable which
+  receives the full information on each entry in the `MDContentList` and returns
+  True or False. 
+
+- `match_ctx(self, pred)`: The `pred` receives the context for each entry and
+  returns a boolean.
+
+- `match_page(self, pred)`: The `pred` receives the `page` object for each entry
+  and returns a boolean.
+
+- `match_doc(self, pred)`: The `pred` receives the markdown body for each entry
+  and returns a boolean.
+
+- `url_match(self, url_pred)`: The `pred` receives the `url` (relative to
+  `htdocs`) for each entry and returns a boolean.
+
+- `path_match(self, src_pred)`: The `pred` receives the path to the Markdown
+  source for each entry and returns a boolean.
+
+### Specialized searching/filtering
+
+All of these return a new `MDContentList` object.
+
+- `posts(self, ordered=True)`: Returns a new `MDContentList` with those entries
+  which are blog posts. In practice this means those with markdown sources in
+  the `posts/` or `blog/` subdirectories or those which have a `page.type` of
+  "post", "blog", "blog-entry" or "blog_entry". Normally ordered by date (newest
+  first), but this can be turned off by setting `ordered` to False.
+
+- `in_date_range(self, start, end, date_key='DATE')`: Posts/pages with a date
+  between `start` and `end`. The key for the date field can be specifed using
+  `date_key`.  Unless the value for `date_key` is either `DATE` or `MTIME`, then
+  the key is looked for in the `page` variables for the entry.
+
+- `has_taxonomy(self, haystack_keys, needles)`: A general search for entries
+  belonging to a taxonomy group, such as category, tag, section or type. They
+  `haystack_keys` are the `page` variables to examine while `needles` is a list
+  of the values to look for in the values of those variables. A string value for
+  `needles` is treated as a one-item list. The search is case-insensitive.
+
+- `in_category(self, catlist)`: A shortcut method for
+  `self.has_taxonomy(['category', 'categories'], catlist)`
+
+- `has_tag(self, taglist)`: A shortcut method for `self.has_taxonomy(['tag',
+  'tags'], taglist)`.
+
+- `in_section(self, sectionlist)`: A shortcut method for
+  `self.has_taxonomy(['section', 'sections'], sectionlist)`.
+
+### Sorting
+
+All of these return a new `MDContentList` object with the entries in the
+specified order.
+
+- `sorted_by(self, key, reverse=False, default_val=-1)`: A general sorting
+  method. The `key` is the `page` variable to sort on, `default_val` is the
+  value to assume if there is no such variable present in the entry, while
+  `reverse` indicates whether the sort is to be descending (True) or ascending
+  (False, the default).
+
+- `sorted_by_date(self, newest_first=True, date_key='DATE')`: Sorting by date,
+  newest first by default. The date key to sort on can be specified if desired.
+
+- `sorted_by_title(self, reverse=False)`: Sorting by `page.title`, ascending
+  by default.
+
+### Pagination
+
+- `paginate(self, pagesize=5, context=None)`: Divides the `MDContentList` into
+  chunks of size `pagesize` and returns a tuple consisting of the chunks and a
+  list of `page_urls` (one for each page, in order). If an appropriate template
+  context is provided, pages 2 and up will be written to the webroot output
+  directory to destination files whose names are based upon the URL for the
+  first page (and the page number, of course). Without the context, the
+  `page_urls` will be None. It is the responsibility of the calling template to
+  check the `_page` variable for the current page to be rendered (this defaults
+  to 1). Each iteration will get all chunks and must use this variable to limit
+  itself appropriately.
+
+Typical usage of `paginate()`:
+
+```mako
+<%
+  posts = MDCONTENT.posts()
+  chunks, page_urls = posts.paginate(5, context)
+  curpage = context.get('_page', 1)
+%>
+
+% for post in chunks[curpage-1]:
+  ${ show_post(post) }
+% endfor
+
+% if len(chunks) > 1:
+  ${ prevnext(len(chunks), curpage, page_urls) }
+% endif
+```

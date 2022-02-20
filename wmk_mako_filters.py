@@ -66,7 +66,7 @@ def date_to_iso(s=None, sep='T', upto='sec', with_tz=False):
             return s
         d = str(d)
         if sep and sep != ' ' and len(sep) == 1:
-            d.replace(' ', sep)
+            d = d.replace(' ', sep, 1)
         tz = '+00:00'
         found = re.search(r'([-+]\d\d:\d\d)$', d)
         if found:

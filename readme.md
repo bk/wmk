@@ -674,6 +674,8 @@ Mako, the following filters are by default made available in templates:
 - `strip_html`: Remove any markdown/html markup from the text. Paragraphs will
   not be preserved.
 
+- `cleanurl`: Remove trailing 'index.html' from URLs.
+
 If you wish to provide additional filters without having to explicitly define or
 import them in templates, the best way of doing this his to add them via the
 `mako_imports` setting in `wmk_config.yaml` (see above).

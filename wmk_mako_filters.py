@@ -22,6 +22,7 @@ __all__ = [
     'truncatewords',
     'p_unwrap',
     'strip_html',
+    'cleanurl',
 ]
 
 
@@ -234,3 +235,12 @@ def strip_html(s):
     # Inline tags
     ret = re.sub(r'<[^>]+>', '', ret, flags=re.IGNORECASE)
     return ret.strip()
+
+
+def cleanurl(s):
+    """
+    Change /path/index.html to /path/.
+    """
+    if s.endswith('/index.html'):
+        return s[:-10]
+    return s

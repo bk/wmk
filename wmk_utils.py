@@ -9,6 +9,10 @@ def slugify(s):
     extension, remove that first and re-append a lower case version of it before
     returning the result. Probably only works for Latin text.
     """
+    if not isinstance(s, str):
+        # print("WARNING: NOT A STRING: ", s)
+        s = str(s)
+
     ext = ''
     ext_re = r'(\.[a-zA-Z0-9]{1,8})$'
     found = re.search(ext_re, s)
@@ -186,13 +190,92 @@ class MDContentList(list):
             return False
         return self.match_page(found)
 
+    def taxonomy_info(self, keys, order='count'):
+        """
+        A list of values for any of the keys in `keys`. The values are assumed
+        to be strings/ints or lists of strings/ints. Example usage:
+
+        tags = MDCONTENT.taxonomy_info(['tag', 'tags'])
+
+        Each record in the returned list looks like
+
+        {'name': f1,  # First found form of this taxon
+         'slug': slug, # result of slugifying first-found-item
+         'forms': [f1,f2...], # Different forms of this taxon found (e.g. lower/uppercase)
+         'count': n, # how many documents match
+         'items': items, } # MDContentList object
+        """
+        if isinstance(keys, str):
+            keys = [keys]
+        if not keys:
+            return []
+        taxons = {}
+        slug2name = {}
+        seen_urls = set()
+        def _additem(tx, item):
+            seen_key = ':'.join([slugify(tx), item['url']])
+            if tx in taxons:
+                taxons[tx]['count'] += 1
+                if not item['url'] in seen_urls:
+                    taxons[tx]['items'].append(item)
+                    seen_urls.add(seen_key)
+            else:
+                slug = slugify(tx)
+                if slug in slug2name:
+                    taxons[slug2name[slug]]['count'] += 1
+                    if not seen_key in seen_urls:
+                        taxons[slug2name[slug]]['items'].append(item)
+                        seen_urls.add(seen_key)
+                    if not tx in taxons[slug2name[slug]]['forms']:
+                        taxons[slug2name[slug]]['forms'].append(tx)
+                else:
+                    taxons[tx] = {
+                        'name': tx,
+                        'slug': slug,
+                        'forms': [tx],
+                        'count': 1,
+                        'items': MDContentList([item]),
+                    }
+                    seen_urls.add(seen_key)
+                    slug2name[slug] = tx
+        for it in self:
+            pg = it['data']['page']
+            for k in keys:
+                if k in pg:
+                    if isinstance(pg[k], (str, int)):
+                        _additem(pg[k], it)
+                    elif isinstance(pg[k], (list, tuple)):
+                        for tx in pg[k]:
+                            _additem(tx, it)
+        found = list(taxons.values())
+        if order == 'count':
+            found.sort(key=lambda x: x['count'], reverse=True)
+        elif order in ('name', 'slug'):
+            found.sort(key=lambda x: x[order], reverse=False)
+        return found
+
+    def get_categories(self, order='name'):
+        "Categories along with list of pages/posts in them."
+        return self.taxonomy_info(['category', 'categories'], order)
+
+    def get_tags(self, order='name'):
+        "Tags along with list of pages/posts tagged with them."
+        return self.taxonomy_info(['tag', 'tags'], order)
+
+    def get_sections(self, order='name'):
+        "Sections along with list of pages/posts in them."
+        return self.taxonomy_info(['section', 'sections'], order)
+
     def in_category(self, catlist):
+        "Pages/posts in any of the listed categories."
         return self.has_taxonomy(['category', 'categories'], catlist)
 
     def has_tag(self, taglist):
+        "Pages/posts having any of the given tags."
         return self.has_taxonomy(['tag', 'tags'], taglist)
 
     def in_section(self, sectionlist):
+        "Pages/posts in any of the given sections."
         return self.has_taxonomy(['section', 'sections'], sectionlist)
 
     def paginate(self, pagesize=5, context=None):

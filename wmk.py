@@ -10,13 +10,14 @@ import sass
 import yaml
 import frontmatter
 import markdown
+import pypandoc
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template, TemplateLookupException
 from mako.runtime import Undefined
 
-from wmk_utils import slugify, attrdict, MDContentList
+from wmk_utils import slugify, attrdict, MDContentList, RenderCache
 import wmk_mako_filters as wmf
 
 
@@ -99,7 +100,7 @@ def main(basedir=None, force=False):
     conf['_index_yaml_data'] = index_yaml or {}
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
-        template_vars, conf)
+        template_vars, conf, force)
     # 4) render templates
     process_templates(templates, lookup, template_vars, force)
     # 5) render Markdown content
@@ -208,11 +209,38 @@ def process_markdown_content(content, lookup, conf, force):
 
 
 def render_markdown(ct, conf):
-    "Convert markdown document to HTML (including shortcodes)"
+    """
+    Convert markdown document to HTML (including shortcodes).
+    If possible, retrieve the converted version from cache.
+    """
     if 'CONTENT' in ct:
         return ct['CONTENT']
     data = ct['data']
+    pg = data.get('page', {})
     doc = ct['doc']
+    target = ct.get('target', '')
+    # The following settings affect cache validity:
+    extensions = pg.get('markdown_extensions',
+                        conf.get('markdown_extensions', None))
+    if not extensions and not isinstance(extensions, (list, tuple)):
+        extensions = ['extra', 'sane_lists']
+    is_pandoc = pg.get('pandoc', conf.get('pandoc', False))
+    pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
+    pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
+    # TODO: offer support for multiple output formats?
+    # should be a markdown subformat
+    pandoc_input = pg.get('pandoc_input_format',
+                          conf.get('pandoc_input_format')) or 'markdown'
+    # should be an html subformat
+    pandoc_output = pg.get('pandoc_output_format',
+                           conf.get('pandoc_output_format')) or 'html'
+    optstr = str([target, extensions, is_pandoc,
+                  pandoc_filters, pandoc_options,
+                  pandoc_input, pandoc_output])
+    cache = RenderCache(doc, optstr)
+    ret = cache.get_cache()
+    if ret:
+        return ret
     nth = {}
     if '{{<' in doc:
         # Mako shortcodes
@@ -222,10 +250,18 @@ def render_markdown(ct, conf):
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
-    extensions = conf.get('markdown_extensions', None)
-    if extensions is None:
-        extensions = ['extra', 'sane_lists']
-    return markdown.markdown(doc, extensions=extensions)
+    if is_pandoc:
+        popt = {}
+        if pandoc_filters:
+            popt['filters'] = pandoc_filters
+        if pandoc_options:
+            popt['extra_args'] = pandoc_options
+        ret = pypandoc.convert_text(
+            doc, pandoc_output, format=pandoc_input, **popt)
+    else:
+        ret = markdown.markdown(doc, extensions=extensions)
+    cache.write_cache(ret)
+    return ret
 
 
 def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, force):
@@ -289,7 +325,7 @@ def get_index_yaml_data(ctdir, datadir):
     return ret
 
 
-def get_content(ctdir, datadir, outputdir, template_vars, conf):
+def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     """
     Get those markdown files that need processing.
     """

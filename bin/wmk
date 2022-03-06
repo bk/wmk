@@ -12,6 +12,7 @@ FORCE=""
 SERVEPORT=""
 SERVEIP=""
 WMK_CONF="$BASEDIR/wmk_config.yaml"
+CACHE_FILE="/tmp/wmk_render_cache.$(id -u).db"
 
 . "$WMK_HOME/venv/bin/activate"
 
@@ -50,8 +51,18 @@ usage(){
     echo "  wmk build|watch <dirname> [-f|--force]"
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk info|env|debug <dirname>"
+    echo "  wmk clear-cache"
     echo "Action abbrevs: b|r|run=build; w=watch; s=serve"
     echo "See $WMK_HOME/readme.md for documentation"
+}
+
+clean_cache(){
+    if [[ -e "$CACHE_FILE" ]]; then
+        echo "Removing cache file ($CACHE_FILE)"
+        rm -f "$CACHE_FILE"
+    else
+        echo "No cache file found"
+    fi
 }
 
 if test -d "$BASEDIR"
@@ -94,12 +105,22 @@ then
             else
                 echo "  - WARNING: $(realpath "$BASEDIR") has no wmk_config.yaml!"
             fi
+            if [[ -e "$CACHE_FILE" ]]; then
+                echo "  - cache file: $CACHE_FILE"
+            else
+                echo "  - no cache file present"
+            fi
+            ;;
+        clear-cache)
+            clean_cache
             ;;
         *)
             usage
             exit 1
             ;;
     esac
+elif [[ "$ACTION" == "clear-cache" ]]; then
+    clean_cache
 else
     usage
     exit 1

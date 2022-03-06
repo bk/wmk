@@ -61,6 +61,10 @@ file organization.
   port can be modified with the `-p` and `-i` switches or be be configured via
   `wmk_config.yaml` – see below). Synonyms for `serve` are `srv` and `s`.
 
+- `wmk clear-cache`: Remove the HTML rendering cache, which is a SQLite file in
+  `/tmp/`. This should only be necessary in case of changed shortcodes or
+  shortcode dependencies.
+
 ## File organization
 
 Inside a given working directory, `wmk` assumes the following subdirectories for
@@ -200,10 +204,30 @@ support for the following settings:
   (so that the `draft` status flag is ignored) by setting `render_drafts` to True
   in the config file.
 
+- `pandoc`: Normally [Python-Markdown][pymarkdown] is used for Markdown
+  processing, but if this boolean setting is true, then Pandoc via
+  [Pypandoc][pypandoc] is used by default instead. This can be turned off or on
+  through frontmatter variables as well.
+
 - `markdown_extensions`: A list of [extensions][ext] to enable for markdown
   processing by Python-Markdown. The default is `['extra', 'sane_lists']`.
   If you specify [third-party extensions][other] here, you have to install them
-  into the Python virtual environment first.
+  into the Python virtual environment first. Obviously, this has no effect
+  if `pandoc` is true. May be set or overridden through frontmatter variables.
+
+- `pandoc_filters`, `pandoc_options`: Lists of filters and options for Pandoc.
+  Has no effect unless `pandoc` is true. May be set or overridden through
+  frontmatter variables.
+
+- `pandoc_input_format`, `pandoc_output_format`: Which input and output formats
+  to assume for Pandoc. The defaults are `markdown` and `html`, respectively.
+  For the former the value should be a markdown subvariant, i.e. one of
+  `markdown` (pandoc-flavoured), `gfm` (github-flavoured), `markdown_mmd`
+  (MultiMarkdown), `markdown_phpextra`, or `markdown_strict`. For the latter,
+  it should be an HTML variant, i.e. either `html`, `html5` or `html4`, or
+  alternatively one of the HTML-based slide formats, i.e. `s5`, `slideous`,
+  `slidy`, `dzslides` or `reavealjs`.  These options have no effect unless
+  `pandoc` is true; both may be overridden through frontmatter variables.
 
 - `sass_output_style`: The output style for Sass/SCSS rendering. This should be
   one of `compact`, `compressed`, `expanded` or `nested`. The default is
@@ -231,6 +255,8 @@ support for the following settings:
   library of Mako components which can be easily used on multiple sites and
   across different themes.
 
+[pymarkdown]: https://python-markdown.github.io/
+[pypandoc]: https://github.com/NicklasTegner/pypandoc
 [ext]: https://python-markdown.github.io/extensions/
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions
 
@@ -481,6 +507,11 @@ files is `md_base.mhtml`.
 
 - `page.draft`: If this is true, it prevents further processing of the markdown
   file unless `render_drafts` has been set to true in the config file.
+
+- `page.markdown_extensions`, `page.pandoc`, `page.pandoc_filters`,
+  `page.pandoc_options`, `page.pandoc_input_format`,
+  `page.pandoc_output_format`: See the description of these options in the
+  section on the configuration file, above.
 
 Note that if two files in the same directory have the same slug, they may both
 be rendered to the same output file; it is unpredictable which of them will go

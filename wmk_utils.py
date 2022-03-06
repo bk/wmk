@@ -1,6 +1,8 @@
 import os
 import re
 import unicodedata
+import sqlite3
+import hashlib
 
 
 def slugify(s):
@@ -330,3 +332,54 @@ class MDContentList(list):
             # (and that all chunks are present in the
             # first item in the return value).
             return (chunks, None)
+
+
+class RenderCache:
+    """
+    Extremely simple cache for rendered HTML, keyed on a SHA1 hash of the
+    markdown contents and the serialized rendering options.
+    May become invalid if shortcodes change without changes in the markdown
+    source.
+    """
+    SQL_INIT = """
+      CREATE TABLE cache (
+          key varchar not null primary key,
+          val text,
+          creat int not null default (strftime('%s', 'now')),
+          upd int not null default (strftime('%s', 'now'))
+      );
+    """
+    SQL_GETROW = "SELECT val FROM cache WHERE key = :key"
+    SQL_INS = "INSERT INTO cache (key, val) VALUES (:key, :val)"
+    SQL_UPD = "UPDATE cache SET val = :val, upd = strftime('%s', 'now') WHERE key = :key"
+
+    def __init__(self, doc, optstr=''):
+        self.filename = '/tmp/wmk_render_cache.%d.db' % os.getuid()
+        need_init = not os.path.exists(self.filename)
+        self.db = sqlite3.connect(self.filename)
+        self.cur = self.db.cursor()
+        self.in_cache = False
+        if need_init:
+            self.cur.execute(self.SQL_INIT)
+        self.key = hashlib.sha1(
+            doc.encode('utf-8') + str(optstr).encode('utf-8')).hexdigest()
+
+    def get_cache(self):
+        self.cur.execute(self.SQL_GETROW, {'key': self.key})
+        row = self.cur.fetchone()
+        self.in_cache = True if row else False
+        return row[0] if row else None
+
+    def write_cache(self, html):
+        if self.in_cache:
+            return
+        prev_val = self.get_cache()
+        if prev_val is None:
+            self.cur.execute(self.SQL_INS, {'key': self.key, 'val': html})
+            self.cur.execute('COMMIT')
+            self.in_cache = True
+        elif prev_val != html:
+            # An update should actually never happen; if it does, the optstr
+            # will not have been based on all relevant options
+            self.cur.execute(self.SQL_UPD, {'key': self.key, 'val': html})
+            self.cur.execute('COMMIT')

@@ -94,6 +94,7 @@ def main(basedir=None, force=False):
         imports=mako_imports)
     conf['_lookup'] = lookup
     # 3) get info about stand-alone templates and Markdown content
+    template_vars['site'].build_time = datetime.datetime.now()
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])

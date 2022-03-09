@@ -7,7 +7,7 @@ main features:
 - Additional data may be loaded from separate YAML files.
 - The content is rendered using [Mako][mako] templates.
 - Stand-alone templates are also rendered if present.
-- Configurable shortcodes (though none built-in at present).
+- Configurable shortcodes (and a few built-in ones).
 - Sass/SCSS support.
 - Support for themes.
 
@@ -411,6 +411,9 @@ The following default shortcodes are provided by the `wmk` installation:
 - `youtube`: A YouTube video. One required argument: `id`. Optional arguments:
   `css_class`, `autoplay`, `title`.
 
+- `var`: The value of a variable, e.g. `"page.title"` or `"site.description"`.
+  One required argument: `varname`. Optional argument: `default` (which defaults
+  to the empty string), indicating what to show if the variable is not available.
 
 ## Site and page variables
 
@@ -549,6 +552,10 @@ Site variables are the keys-value pairs under `site:` in `wmk_config.yaml`.
 - `site.leading_path`: If the web pages built by `wmk` are not at the root of
   the website but in a subdirectory, this is the appropriate prefix path.
   Normally without a trailing slash.
+
+- `site.build_time`: This is automatically added to the site variable by `wmk`.
+  It is a datetime object indicating when the rendering phase of the current
+  run started.
 
 Templates or themes may be configurable through various site variables, e.g.
 `site.paginate` for number of items per page in listings or `site.mainfont` for

@@ -166,6 +166,7 @@ following context variables:
 
 - `CONTENT`: The rendered HTML produced from the markdown source.
 - `RAW_CONTENT`: The original markdown source.
+- `SELF_FULL_PATH`: The full path to the source Markdown file.
 - `MTIME`: A datetime object representing the modification time for the markdown
   file.
 - `DATE`: A datetime object representing the first found value of `date`,
@@ -380,6 +381,17 @@ by the shortcode component.
 
 The following default shortcodes are provided by the `wmk` installation:
 
+- `include`: Insert the contents of the named file at this point.
+  One required argument: `filename`. Optional argument: `fallback` (which
+  defaults to the empty string), indicating what to show if the file is not
+  found. The file must be inside the content directory (`CONTENTDIR`), otherwise
+  it will not be read. The path is interpreted as relative to the directory in
+  which the Markdown file is placed. A path starting with `/` is taken to start
+  at `CONTENTDIR`.  Nested includes are possible but the paths of subincludes
+  are interpreted relative to the original directory (rather than the directory
+  in which the included file has been placed). Note that `include()` is always
+  handled before other shortcodes.
+
 - `figure`: An image wrapped in a `<figure>` tag. Accepts the following
   arguments: `src` (the image path or URL), `img_link`, `link_target`,
   `caption`, `figtitle`, `alt`, `credit` (image attribution), `credit_link`,
@@ -397,7 +409,7 @@ The following default shortcodes are provided by the `wmk` installation:
   'fit_height', 'fit', 'fill'; the last is the default), `format` ('jpg' or
   'png'; default is 'jpg'), `quality` (default 0.75 and applies only to jpegs).
   Returns a path under `/resized_images/` (possibly prefixed with the value of
-  `site_leading_path`) pointing to the resized version of the image.  The
+  `site.leading_path`) pointing to the resized version of the image.  The
   filename is a SHA1 hash + an extension, so repeated requests for the same
   resize operation are only performed once.  The source `path` is taken to be
   relative to the `WEBROOT`, i.e. the project `htdocs` directory.

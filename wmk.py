@@ -60,7 +60,7 @@ def main(basedir=None, force=False):
     os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # support content bundles (mainly images inside content dir)
     os.system(
-        'rsync -a --exclude "*.md" --exclude "*.yaml" --prune-empty-dirs "%s/" "%s/"'
+        'rsync -a --exclude "*.md" --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
         % (dirs['content'], dirs['output']))
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
@@ -149,6 +149,7 @@ def process_templates(templates, lookup, template_vars, force):
         self_url = tpl['target'].replace(data['WEBROOT'], '', 1)
         self_url = re.sub(r'/index.html$', '/', self_url)
         data['SELF_URL'] = self_url
+        data['SELF_FULL_PATH'] = None
         data['SELF_TEMPLATE'] = tpl['src']
         data['page'] = attrdict({}) # empty but present...
         try:
@@ -245,6 +246,13 @@ def render_markdown(ct, conf):
     nth = {}
     if '{{<' in doc:
         # Mako shortcodes
+        # We need to handle include() first.
+        incpat = r'{{<\s*(include)\(\s*(.*?)\s*\)\s*>}}'
+        incfound = re.search(incpat, doc, re.DOTALL)
+        while incfound:
+            doc = re.sub(incpat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
+            incfound = re.search(incpat, doc, re.DOTALL)
+        # Now other shortcodes.
         # funcname, argstring
         pat = r'{{<\s*(\w+)\(\s*(.*?)\s*\)\s*>}}'
         found = re.search(pat, doc, re.DOTALL)
@@ -411,6 +419,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             target_fn = os.path.join(html_dir, html_fn)
             data['SELF_URL'] = '' if page.get('do_not_render') \
                 else target_fn.replace(outputdir, '', 1)
+            data['SELF_FULL_PATH'] = source_file
             data['SELF_TEMPLATE'] = template
             data['MTIME'] = datetime.datetime.fromtimestamp(
                 os.path.getmtime(source_file))

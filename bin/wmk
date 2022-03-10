@@ -52,7 +52,7 @@ usage(){
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache"
-    echo "Action abbrevs: b|r|run=build; w=watch; s=serve"
+    echo "Action abbrevs: b|r|run=build; w=watch; s=serve; c=clear-cache"
     echo "See $WMK_HOME/readme.md for documentation"
 }
 
@@ -111,7 +111,7 @@ then
                 echo "  - no cache file present"
             fi
             ;;
-        clear-cache)
+        c|cl|clean|clear|clean-cache|clear-cache)
             clean_cache
             ;;
         *)
@@ -119,7 +119,7 @@ then
             exit 1
             ;;
     esac
-elif [[ "$ACTION" == "clear-cache" ]]; then
+elif [[ "$ACTION" =~ ^(c|cl|clea[rn]|clea[rn]-cache)$ ]]; then
     clean_cache
 else
     usage

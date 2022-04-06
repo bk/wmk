@@ -1,5 +1,5 @@
 <%page args="filename, fallback=''" />\
-<% import os %>
+<%! import os %>\
 <%
 if filename.startswith('/'):
     mybase = CONTENTDIR

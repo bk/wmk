@@ -63,7 +63,7 @@ file organization.
 
 - `wmk clear-cache`: Remove the HTML rendering cache, which is a SQLite file in
   `/tmp/`. This should only be necessary in case of changed shortcodes or
-  shortcode dependencies.
+  shortcode dependencies. Note that the cache can be disabled in `wmk_config.yaml`.
 
 ## File organization
 
@@ -229,6 +229,11 @@ support for the following settings:
   alternatively one of the HTML-based slide formats, i.e. `s5`, `slideous`,
   `slidy`, `dzslides` or `reavealjs`.  These options have no effect unless
   `pandoc` is true; both may be overridden through frontmatter variables.
+
+- `use_cache`: boolean, True by default. If you set this to False, the Markdown
+  rendering cache will be disabled. This is useful for small projects where
+  the final HTML output often depends on factors other than the Markdown files
+  themselves.
 
 - `sass_output_style`: The output style for Sass/SCSS rendering. This should be
   one of `compact`, `compressed`, `expanded` or `nested`. The default is

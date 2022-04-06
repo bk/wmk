@@ -236,13 +236,18 @@ def render_markdown(ct, conf):
     # should be an html subformat
     pandoc_output = pg.get('pandoc_output_format',
                            conf.get('pandoc_output_format')) or 'html'
-    optstr = str([target, extensions, is_pandoc,
-                  pandoc_filters, pandoc_options,
-                  pandoc_input, pandoc_output])
-    cache = RenderCache(doc, optstr)
-    ret = cache.get_cache()
-    if ret:
-        return ret
+    use_cache = conf.get('use_cache', True)
+    if use_cache:
+        optstr = str([target, extensions, is_pandoc,
+                      pandoc_filters, pandoc_options,
+                      pandoc_input, pandoc_output])
+        cache = RenderCache(doc, optstr)
+        ret = cache.get_cache()
+        if ret:
+            return ret
+    else:
+        ret = None
+        cache = None
     nth = {}
     if '{{<' in doc:
         # Mako shortcodes
@@ -269,7 +274,8 @@ def render_markdown(ct, conf):
             doc, pandoc_output, format=pandoc_input, **popt)
     else:
         ret = markdown.markdown(doc, extensions=extensions)
-    cache.write_cache(ret)
+    if cache:
+        cache.write_cache(ret)
     return ret
 
 

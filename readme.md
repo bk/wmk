@@ -216,6 +216,20 @@ support for the following settings:
   into the Python virtual environment first. Obviously, this has no effect
   if `pandoc` is true. May be set or overridden through frontmatter variables.
 
+- `markdown_extension_configs`: Settings for your markdown extensions. May be
+  set in the config file or in the frontmatter. For convenience, there are
+  special frontmatter settings for two extensions, namely for `toc` and
+  `wikilinks`:
+  - The `toc` boolean setting will turn the `toc` extension off if set to False
+    and on if set to True, regardless of its presence in `markdown_extensions`.
+  - If `toc` is in `markdown_extensions` (or has been turned on via the `toc`
+    boolean), then the `toc_depth` frontmatter variable will affect the
+    configuration  of the extension regardless of the `markdown_extension_configs`
+    setting.
+  - If `wikilinks` is in `markdown_extensions` then the options specified
+    in the `wikilinks` frontmatter setting will be passed on to the extension.
+    Example: `wikilinks: {'base_url': '/somewhere'}`.
+
 - `pandoc_filters`, `pandoc_options`: Lists of filters and options for Pandoc.
   Has no effect unless `pandoc` is true. May be set or overridden through
   frontmatter variables.

@@ -222,24 +222,21 @@ def render_markdown(ct, conf):
     doc = ct['doc']
     target = ct.get('target', '')
     # The following settings affect cache validity:
-    extensions = pg.get('markdown_extensions',
-                        conf.get('markdown_extensions', None))
-    if not extensions and not isinstance(extensions, (list, tuple)):
-        extensions = ['extra', 'sane_lists']
+    extensions, extension_configs = markdown_extensions_settings(pg, conf)
     is_pandoc = pg.get('pandoc', conf.get('pandoc', False))
     pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
     pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
-    # TODO: offer support for multiple output formats?
-    # should be a markdown subformat
+    # TODO: offer support for multiple output formats when using pandoc?
+    # This should be a markdown subformat or gfm
     pandoc_input = pg.get('pandoc_input_format',
                           conf.get('pandoc_input_format')) or 'markdown'
-    # should be an html subformat
+    # This should be an html subformat
     pandoc_output = pg.get('pandoc_output_format',
                            conf.get('pandoc_output_format')) or 'html'
     use_cache = conf.get('use_cache', True)
     if use_cache:
-        optstr = str([target, extensions, is_pandoc,
-                      pandoc_filters, pandoc_options,
+        optstr = str([target, extensions, extension_configs,
+                      is_pandoc, pandoc_filters, pandoc_options,
                       pandoc_input, pandoc_output])
         cache = RenderCache(doc, optstr)
         ret = cache.get_cache()
@@ -273,10 +270,41 @@ def render_markdown(ct, conf):
         ret = pypandoc.convert_text(
             doc, pandoc_output, format=pandoc_input, **popt)
     else:
-        ret = markdown.markdown(doc, extensions=extensions)
+        ret = markdown.markdown(
+            doc, extensions=extensions, extension_configs=extension_configs)
     if cache:
         cache.write_cache(ret)
     return ret
+
+
+def markdown_extensions_settings(pg, conf):
+    extensions = pg.get('markdown_extensions',
+                        conf.get('markdown_extensions', None))
+    # Extensions can only be disabled by setting them to an empty list,
+    # not by setting them to None or False.
+    if not extensions and not isinstance(extensions, (list, tuple)):
+        extensions = ['extra', 'sane_lists']
+    extension_configs = pg.get('markdown_extension_configs',
+                        conf.get('markdown_extension_configs', {}))
+    # Special convenience options for specific extensions,
+    # configurable on a page-by-page basis.
+    if 'toc' in pg and pg['toc'] and not 'toc' in extensions:
+        extensions.append('toc')
+    if 'toc' in extensions:
+        if 'toc' in pg and not pg['toc']:
+            # toc is turned off for this page
+            extensions = [_ for _ in extensions
+                          if not (isinstance(_, str) and _ == 'toc')]
+        elif 'toc_depth' in pg:
+            if not 'toc' in extension_configs:
+                extension_configs['toc'] = {'toc_depth': pg['toc_depth']}
+            else:
+                extension_configs['toc']['toc_depth'] = pg['toc_depth']
+    if 'wikilinks' in extensions and pg.get('wikilinks', None):
+        # The defaults are {'base_url': '/', 'end_url': '/', 'html_class': 'wikilink'}
+        wikilinks_conf = pg['wikilinks']
+        extension_configs['wikilinks'] = wikilinks_conf
+    return (extensions, extension_configs)
 
 
 def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, force):

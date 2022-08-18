@@ -148,10 +148,11 @@ class MDContentList(list):
         return self.sorted_by('title', reverse=reverse, default_val='ZZZ')
 
     def in_date_range(self, start, end, date_key='DATE'):
+        std = lambda ts: str(ts).replace(' ', 'T')  # standard ISO fmt
         def found(x):
             pg = x['page']
-            date = data[date_key] if date_key in ('DATE', 'MTIME') else pg.get(date_key, data['DATE'])
-            return str(start) <= str(date) <= str(end)
+            date = x[date_key] if date_key in ('DATE', 'MTIME') else pg.get(date_key, x['DATE'])
+            return std(start) <= std(date) <= std(end)
         return self.match_ctx(found)
 
     def posts(self, ordered=True):
@@ -279,6 +280,123 @@ class MDContentList(list):
     def in_section(self, sectionlist):
         "Pages/posts in any of the given sections."
         return self.has_taxonomy(['section', 'sections'], sectionlist)
+
+    def page_match(self, match_expr, ordering=None, limit=None):
+        """
+        The `match expr` is either a dict or a list of dicts. Each dict contains
+        one or more of the following keys, all of which must match. If a list of
+        dicts is given, the union of matching entries from all dicts is
+        returned.
+
+        - `title`: A regular expression which will be applied to the page title.
+        - `slug`: A regular expression which will be applied to the slug.
+        - `url`: A regular expression which will be applied to the target URL.
+        - `path`: A regular expression which will be applied to the path to the markdown
+           source file (i.e. the `source_file_short` field).
+        - `doc`: A regular expression which will be applied to the body of the markdown
+          source document.
+        - `date_range`: A list containing two ISO-formatted dates and optionally a date
+          key (`DATE` by default)
+        - `has_attrs`: A list of frontmatter variable names. Matching pages must have a
+          non-empty value for each of them.
+        - `attrs`: A dict where each key is the name of a frontmatter variable and the
+          value is the value of that attribute. If the value is a string, it will be
+          matched case-insensitively. All key-value pairs must match.
+        - `has_tag`, `in_section`, `in_category`: The values are lists of tags, sections
+          or categories, respectively, at least one of which must match
+          (case-insensitively).
+        - `is_post`: If set to True, will match if the page is a blog post; if set to
+          False will match if the page is not a blog post.
+        - `exclude_url`: The page with this URL should be omitted (normally the
+          calling page).
+
+        The `ordering` parameter, if specified, should be either
+        `title`, `slug`, `url` or `date`, with an optional `-` in front to indicate
+        reverse ordering. The `limit`, if specified, indicates the maximum number of
+        pages to return.
+        """
+        found = MDContentList([])
+        known_conds = (
+            'title', 'slug', 'url', 'path', 'doc', 'date_range',
+            'has_attrs', 'attrs', 'has_tag', 'in_section', 'in_category',
+            'is_post', 'exclude_url')
+        if isinstance(match_expr, dict):
+            if not match_expr:
+                raise Exception('No condition for page_match')
+            for k in match_expr:
+                if not k in known_conds:
+                    raise Exception('Unknown condition for page_match: %s' % k)
+            def pred(c):
+                x = match_expr
+                p = c['data']['page']
+                if 'exclude_url' in x and it['url'] == x['exclude_url']:
+                    return False
+                for k in ('title', 'slug'):
+                    if k in x and not re.search(x[k], p.get(k, ''), flags=re.I):
+                        return False
+                if 'url' in x and not re.search(x['url'], c['url']):
+                    return False
+                if 'path' in x and not re.search(x['path'], c['source_file_short']):
+                    return False
+                if 'doc' in x and not re.search(x['doc'], c['doc'], flags=re.I):
+                    return False
+                if 'has_attrs' in x:
+                    for a in x['has_attrs']:
+                        if not p.get(a):
+                            return False
+                if 'attrs' in x:
+                    for k in x['attrs']:
+                        if not str(p.get(k, '')).lower() == str(x['attrs'][k]).lower():
+                            return False
+                if 'has_tag' in x:
+                    if not MDContentList([c]).has_tag(x['has_tag']):
+                        return False
+                if 'in_section' in x:
+                    if not MDContentList([c]).in_section(x['in_section']):
+                        return False
+                if 'in_category' in x:
+                    if not MDContentList([c]).in_category(x['in_category']):
+                        return False
+                if 'is_post' in x:
+                    posts = MDContentList([c]).posts(ordered=False)
+                    if x['is_post'] and not posts:
+                        return False
+                    elif not x['is_post'] and posts:
+                        return False
+                if 'date_range' in x and not MDContentList([c]).in_date_range(*x['date_range']):
+                    return False
+                return True
+            found = self.match_entry(pred)
+        elif isinstance(match_expr, (list, tuple)):
+            accum = {}
+            for exp in match_expr:
+                partial = self.page_match(exp)
+                for it in partial:
+                    if it['url'] in accum:
+                        continue
+                    accum[it['url']] = it
+            found = MDContentList(list(accum.values()))
+        else:
+            raise Exception(
+                'page_match: the match_expr must be either a dict or a list of dicts')
+        if ordering and found:
+            # title,slug,url,date
+            reverse = False
+            if ordering[0] == '-':
+                reverse = True
+                ordering = ordering[1:]
+            if ordering in ('title', 'slug'):
+                found = found.sorted_by(ordering, reverse, 'ZZZ')
+            elif ordering == 'url':
+                k = lambda x: x.get('url', 'zzz')
+                found = MDContentList(sorted(found, key=k, reverse=reverse))
+            elif ordering == 'date':
+                found = found.sorted_by_date(newest_first=reverse)
+            else:
+                raise Exception('Unknown ordering for page_match: %s' % ordering)
+        if limit and len(found) > limit:
+            found = found[:limit]
+        return found
 
     def paginate(self, pagesize=5, context=None):
         """

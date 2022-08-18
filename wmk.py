@@ -192,15 +192,18 @@ def process_markdown_content(content, lookup, conf, force):
         data['CONTENT'] = html
         data['RAW_CONTENT'] = ct['doc']
         page = data['page']
+        html_output = ''
         try:
             html_output = template.render(**data)
         except:
             print("WARNING: Error when rendering md {}: {}".format(
                 ct['source_file_short'], text_error_template().render()))
-            html_output = None
+        # If present, POSTPROCESS will have been added by a shortcode call
+        if html_output and page.get('POSTPROCESS'):
+            html_output = postprocess_html(page.POSTPROCESS, data, html_output)
         if html_output and not page.get('do_not_render', False):
             with open(ct['target'], 'w') as f:
-                f.write(template.render(**data))
+                f.write(html_output)
             print('[%s] - content: %s' % (
                 str(datetime.datetime.now()), ct['source_file_short']))
         elif html_output:
@@ -208,6 +211,25 @@ def process_markdown_content(content, lookup, conf, force):
             # ("headless" in Hugo parlance)
             print('[%s] - non-rendered: %s' % (
                 str(datetime.datetime.now()), ct['source_file_short']))
+
+
+def postprocess_html(ppr, data, html):
+    """
+    - ppr is a postprocessing callable or a list of such.
+    - data is the entire context previously passed to the mako renderer.
+    - html is the entire HTML page previously returned from the mako renderer.
+
+    Each postprocessing callable MUST return the html (changed or unchanged).
+    Returning None or an empty string results in the file not being rendered.
+    """
+    # data contains page, CONTENT, RAW_CONTENT, etc.
+    if callable(ppr):
+        return ppr(html, **data)
+    elif isinstance(ppr, (list, tuple)):
+        for pp in ppr:
+            if callable(pp):
+                html = pp(html, **data)
+    return html
 
 
 def render_markdown(ct, conf):

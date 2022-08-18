@@ -813,6 +813,46 @@ All of these return a new `MDContentList` object.
 - `in_section(self, sectionlist)`: A shortcut method for
   `self.has_taxonomy(['section', 'sections'], sectionlist)`.
 
+- `page_match(self, match_expr, ordering=None, limit=None)`: This is actually
+  quite a general matching method but does not require the caller to pass a
+  predicate callable to it, which means that it can be employed in more varied
+  contexts than the general methods described in the last section. A
+  `match_expr` contains the filtering specification. It will be described
+  further below. The `ordering` parameter, if specified, should be either
+  `title`, `slug`, `url` or `date`, with an optional `-` in front to indicate
+  reverse ordering. The `limit`, if specified, indicates the maximum number of
+  pages to return.
+
+A `match_expr` for `page_match()` is either a dict or a list of dicts.  If it is
+a dict, each page in the result set must match each of the attributes specified
+in it. If it is a list of dicts, each page in the result set must match at least
+one of the dicts (i.e., the returned result set contains the union of all
+matches from all dicts in the list). When a string or regular expression match
+is being performed in this process, it will be case-insensitive. The supported
+attributes (i.e. dict keys) are as follows:
+
+- `title`: A regular expression which will be applied to the page title.
+- `slug`: A regular expression which will be applied to the slug.
+- `url`: A regular expression which will be applied to the target URL.
+- `path`: A regular expression which will be applied to the path to the markdown
+  source file (i.e. the `source_file_short` field).
+- `doc`: A regular expression which will be applied to the body of the markdown
+  source document.
+- `date_range`: A list containing two ISO-formatted dates and optionally a date
+  key (`DATE` by default) - see the description of `in_date_range()` above.
+- `has_attrs`: A list of frontmatter variable names. Matching pages must have a
+  non-empty value for each of them.
+- `attrs`: A dict where each key is the name of a frontmatter variable and the
+  value is the value of that attribute. If the value is a string, it will be
+  matched case-insensitively. All key-value pairs must match.
+- `has_tag`, `in_section`, `in_category`: The values are lists of tags, sections
+  or categories, respectively, at least one of which must match
+  (case-insensitively). See the methods with these names above.
+- `is_post`: If set to True, will match if the page is a blog post; if set to
+  False will match if the page is not a blog post.
+- `exclude_url`: The page with this URL should be omitted from the results
+  (normally the calling page).
+
 ### Sorting
 
 All of these return a new `MDContentList` object with the entries in the

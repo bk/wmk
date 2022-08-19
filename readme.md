@@ -1,9 +1,9 @@
 # wmk
 
-This is a simple static site generator written in Python with the following
-main features:
+This is a static site generator written in Python with the following main
+features:
 
-- Markdown content with YAML metadata.
+- Markdown content with YAML metadata in the frontmatter.
 - Additional data may be loaded from separate YAML files.
 - The content is rendered using [Mako][mako] templates.
 - Stand-alone templates are also rendered if present.
@@ -34,6 +34,9 @@ Required software (aside from Python, of course):
 - For `wmk watch` functionality, you need to be using Linux and have
   `inotifywait` installed.
 
+`wmk` requires a Unix-like environment. In particular, the directory separator
+is assumed to be `/`.
+
 ## Usage
 
 The `wmk` command structure is `wmk <action> <base_directory>`. The base
@@ -45,16 +48,14 @@ file organization.
   the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
   and `debug`.
 
-- `wmk build $basedir [-f|--force]`: Compiles/copies files into `$basedir/htdocs`.
-  If `-f` or `--force` is specified as the third argument, no timestamp checking
-  is done, resulting in all files being re-processed. Synonyms for `run` are
+- `wmk build $basedir [-q|--quick]`: Compiles/copies files into `$basedir/htdocs`.
+  If `-q` or `--quick` is specified as the third argument, only files considered to
+  have changed, based on timestamp checking, are processed. Synonyms for `run` are
   `run`, `b` and `r`.
 
-- `wmk watch $basedir [-f|--force]`: Watches for changes in the source
-  directories inside `$basedir` and recompiles if changes are detected.  If `-f`
-  or `--force` is specified as the third argument, no timestamp checking is done
-  whenever a potential change triggers a rerun of `wmk run`, thus ensuring that
-  all files will be re-processed. A synonym for `watch` is `w`.
+- `wmk watch $basedir`: Watches for changes in the source directories inside
+  `$basedir` and recompiles if changes are detected. A synonym for `watch` is
+  `w`.
 
 - `wmk serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Serves the
   files in `$basedir/htdocs` on `http://127.0.0.1:7007/` by default. The IP and
@@ -63,7 +64,8 @@ file organization.
 
 - `wmk clear-cache`: Remove the HTML rendering cache, which is a SQLite file in
   `/tmp/`. This should only be necessary in case of changed shortcodes or
-  shortcode dependencies. Note that the cache can be disabled in `wmk_config.yaml`.
+  shortcode dependencies. Note that the cache can be disabled in `wmk_config.yaml`
+  or on file-by-file basis via a frontmatter setting (`no_cache`).
 
 ## File organization
 
@@ -117,16 +119,15 @@ content and output. They will be created if they do not exist:
 
   Note that later steps may overwrite files placed by earlier steps.
 
-* For the `run` and `watch` actions, `wmk.py` uses timestamps to prevent
-  unnecessary re-rendering of templates, markdown files and scss sources. The
-  check is rather primitive so it may be necessary to touch the main source file
-  or remove files from `htdocs` in order to trigger a refresh. To force a
-  rebuild of all files, one can also use the `--force` (or `-f`) switch as
-  an extra argument.
+* For the `run` and `watch` actions when `-q` or `--quick` is specified as a
+  modifier, `wmk.py` uses timestamps to prevent unnecessary re-rendering of
+  templates, markdown files and scss sources. The check is rather primitive so
+  it may be necessary to touch the main source file or remove files from
+  `htdocs` in order to trigger a refresh – or simply to omit `--quick`.
 
 * If files are removed from source directories the corresponding files in
   `htdocs` will not disappear automatically. You have to clear them out
-  manually.
+  manually – or simply remove the entire directory and regenerate.
 
 ## Context variables
 
@@ -245,9 +246,10 @@ support for the following settings:
   `pandoc` is true; both may be overridden through frontmatter variables.
 
 - `use_cache`: boolean, True by default. If you set this to False, the Markdown
-  rendering cache will be disabled. This is useful for small projects where
-  the final HTML output often depends on factors other than the Markdown files
-  themselves.
+  rendering cache will be disabled. This is useful for small and medium-sized
+  projects where the final HTML output often depends on factors other than the
+  Markdown files themselves. Note that caching for a specific file can be turned
+  off by putting `no_cache: true` in the frontmatter.
 
 - `sass_output_style`: The output style for Sass/SCSS rendering. This should be
   one of `compact`, `compressed`, `expanded` or `nested`. The default is
@@ -328,11 +330,21 @@ The shortcode component will have access to a context composed of (1) the
 parameters directly specified in the shortcode call; (2) the information from
 the metadata block of the markdown file in which it appears; (3) a counter
 variable, `nth`, indicating number of invocations for that kind of shortcode in
-that markdown document; and (4) the global template variables.
+that markdown document; (4) `LOOKUP`, the Mako `TemplateLookup` object; and (5)
+the global template variables.
 
 Shortcodes are applied **before** the Markdown document is converted to HTML, so
 it is possible to replace a shortcode with Markdown content which will then be
 processed normally.
+
+A consequence of this is that shortcodes do **not** have direct access to (1)
+the list of files to be processed, i.e. `MDCONTENT`, or (2) the rendered HTML
+(including the parts supplied by the Mako template). A shortcode which needs
+either of these must place a (potential) placeholder in the Markdown source as
+well as a callback in `page.POSTPROCESS`. Each callback in this list will be
+called just before the generated HTML is written to `htdocs/`, receiving the
+full HTML as a first argument followed by the rest of the context for the page.
+Examples of such shortcodes are `linkto` and `pagelist`, described below.
 
 Here is an example of a shortcode in Markdown:
 
@@ -400,17 +412,6 @@ by the shortcode component.
 
 The following default shortcodes are provided by the `wmk` installation:
 
-- `include`: Insert the contents of the named file at this point.
-  One required argument: `filename`. Optional argument: `fallback` (which
-  defaults to the empty string), indicating what to show if the file is not
-  found. The file must be inside the content directory (`CONTENTDIR`), otherwise
-  it will not be read. The path is interpreted as relative to the directory in
-  which the Markdown file is placed. A path starting with `/` is taken to start
-  at `CONTENTDIR`.  Nested includes are possible but the paths of subincludes
-  are interpreted relative to the original directory (rather than the directory
-  in which the included file has been placed). Note that `include()` is always
-  handled before other shortcodes.
-
 - `figure`: An image wrapped in a `<figure>` tag. Accepts the following
   arguments: `src` (the image path or URL), `img_link`, `link_target`,
   `caption`, `figtitle`, `alt`, `credit` (image attribution), `credit_link`,
@@ -423,6 +424,39 @@ The following default shortcodes are provided by the `wmk` installation:
 
 - `gist`: A Github gist. Two arguments, both required: `username` and `gist_id`.
 
+- `include`: Insert the contents of the named file at this point.
+  One required argument: `filename`. Optional argument: `fallback` (which
+  defaults to the empty string), indicating what to show if the file is not
+  found. The file must be inside the content directory (`CONTENTDIR`), otherwise
+  it will not be read. The path is interpreted as relative to the directory in
+  which the Markdown file is placed. A path starting with `/` is taken to start
+  at `CONTENTDIR`.  Nested includes are possible but the paths of subincludes
+  are interpreted relative to the original directory (rather than the directory
+  in which the included file has been placed). Note that `include()` is always
+  handled before other shortcodes.
+
+- `linkto`: Links to the first matching (markdown-based) page. The first
+  parameter, `page`, specifies the page which is to be linked to. This is either
+  (a) a simple string representing a slug, title, (partial) path/filename or
+  (partial) URL; or (b) a `match_expr` in the form of a dict or list which will
+  be passed to `page_match()` with a `limit` of 1. Optional arguments: `label`
+  (the link text; the default is the title of the matching page); `ordering`,
+  passed to `page_match()` if applicable; `fallback`, the text to be shown if
+  no matching page is found: `(LINKTO: page not found)` by default; the
+  boolean `unique`, which if set to True causes a fatal error to be raised if
+  multiple pages are found to match; and `link_attr`, which is a string to
+  insert into the `<a>` tag (by default `class="linkto"`).
+
+- `pagelist`: Runs a `page_match()` and lists the found pages. Required argument:
+  `match_expr`. Optional arguments: `ordering`, `limit`, `template`. The default
+  is a simple unordered list of links to the found pages, using the page titles
+  as the link text. If nothing is found, a string specified in the `fallback`
+  parameter (by default an empty string) replaces the shortcode call. The
+  formatting of the list can be changed by pointing to a Mako template using the
+  `template` argument, which will receive a single argument, `pagelist` (a
+  `MDContentList` of found pages). The template will only be called if something
+  is found.
+
 - `resize_image`: Scales and crops images to a specified size. Required
   arguments: `path`, `width`, `height`. Optional arguments: `op` ('fit_width',
   'fit_height', 'fit', 'fill'; the last is the default), `format` ('jpg' or
@@ -432,6 +466,10 @@ The following default shortcodes are provided by the `wmk` installation:
   filename is a SHA1 hash + an extension, so repeated requests for the same
   resize operation are only performed once.  The source `path` is taken to be
   relative to the `WEBROOT`, i.e. the project `htdocs` directory.
+
+- `template`: Calls the Mako template named in the first argument. Any
+  additional arguments are passed directly on to the template (which will also
+  see the normal Mako context for the shortcode itself).
 
 - `twitter`: A tweet. Takes a `tweet_id`, which may be a Twitter status URL or
   the last part (i.e. the actual ID) of the URL.
@@ -542,8 +580,12 @@ files is `md_base.mhtml`.
 - `page.draft`: If this is true, it prevents further processing of the markdown
   file unless `render_drafts` has been set to true in the config file.
 
-- `page.markdown_extensions`, `page.pandoc`, `page.pandoc_filters`,
-  `page.pandoc_options`, `page.pandoc_input_format`,
+- `page.no_cache`: If this is true, the Markdown rendering cache will not be
+  used for this file. (See also the `use_cache` setting in the configuration
+  file).
+
+- `page.markdown_extensions`, `page.markdown_extension_configs`, `page.pandoc`,
+  `page.pandoc_filters`, `page.pandoc_options`, `page.pandoc_input_format`,
   `page.pandoc_output_format`: See the description of these options in the
   section on the configuration file, above.
 

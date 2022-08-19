@@ -27,10 +27,12 @@ KNOWN_DATE_KEYS = (
     'date', 'pubdate', 'modified_date', 'expire_date', 'created_date')
 
 
-def main(basedir=None, force=False):
+def main(basedir=None, quick=False):
     """
     Builds/copies everything into the output dir (htdocs).
     """
+    # `force` mode is now the default and is turned on by setting --quick
+    force = not quick
     if basedir is None:
         basedir = os.path.dirname(os.path.realpath(__file__)) or '.'
     basedir = os.path.realpath(basedir)
@@ -255,7 +257,7 @@ def render_markdown(ct, conf):
     # This should be an html subformat
     pandoc_output = pg.get('pandoc_output_format',
                            conf.get('pandoc_output_format')) or 'html'
-    use_cache = conf.get('use_cache', True)
+    use_cache = conf.get('use_cache', True) and not pg.get('no_cache', False)
     if use_cache:
         optstr = str([target, extensions, extension_configs,
                       is_pandoc, pandoc_filters, pandoc_options,
@@ -647,6 +649,8 @@ def mako_shortcode(conf, ctx, nth=None):
             ckwargs.update(ctx)
             ckwargs.update(kwargs)
             ckwargs['nth'] = nth[name]  # invocation count
+            if not 'LOOKUP' in ckwargs:
+                ckwargs['LOOKUP'] = lookup
             return tpl.render(*args, **ckwargs)
         except Exception as e:
             print("WARNING: shortcode {} failed: {}".format(name, e))
@@ -659,5 +663,5 @@ def mako_shortcode(conf, ctx, nth=None):
 
 if __name__ == '__main__':
     basedir = sys.argv[1] if len(sys.argv) > 1 else None
-    force = True if len(sys.argv) > 2 and sys.argv[2] in ('-f', '--force') else False
-    main(basedir, force)
+    quick = True if len(sys.argv) > 2 and sys.argv[2] in ('-q', '--quick') else False
+    main(basedir, quick)

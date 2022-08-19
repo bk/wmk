@@ -8,7 +8,7 @@ SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
 ACTION="$1"
 BASEDIR="$2"
-FORCE=""
+QUICK=""
 SERVEPORT=""
 SERVEIP=""
 WMK_CONF="$BASEDIR/wmk_config.yaml"
@@ -26,8 +26,12 @@ while [[ "$#" -gt 0 ]]; do
             SERVEIP="$2"
             shift; shift
             ;;
+        -q|--quick)
+            QUICK=--quick
+            shift
+            ;;
         -f|--force)
-            FORCE=--force
+            echo "NOTE: -f|--force is no longer needed. Switch ignored."
             shift
             ;;
         *)
@@ -48,7 +52,7 @@ wmk_http_conf(){
 usage(){
     echo "wmk - a static site builder"
     echo "Usage:"
-    echo "  wmk build|watch <dirname> [-f|--force]"
+    echo "  wmk build|watch <dirname> [-q|--quick]"
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache"
@@ -88,13 +92,13 @@ then
             python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/htdocs"
             ;;
         r|b|run|build)
-            "$WMK_HOME/wmk.py" "$BASEDIR" "$FORCE"
+            "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"
             ;;
         w|watch)
             cd "$BASEDIR" || exit 1
             while true; do
                 inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r .
-                "$WMK_HOME/wmk.py" "$BASEDIR" --force
+                "$WMK_HOME/wmk.py" "$BASEDIR"
             done
             ;;
         debug|env|info)

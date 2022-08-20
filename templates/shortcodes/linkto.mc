@@ -1,5 +1,6 @@
 <%page args="match, label=None, ordering=None, fallback=None, unique=False, link_attr=None" />\
 <%!
+import re
 default_fallback = '(LINKTO: page not found for "%s")'
 
 def linkto_handler(match, label, ordering, fallback, unique, link_attr, nth):
@@ -24,15 +25,18 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, nth):
             match = match.replace('.html', r'\.html')
             match = [{'url': match+'$'}]
         elif not ' ' in match and not '/' in match:
+            match = re.sub(r'[ _-]', r'[_ -]', match)
             match = [
                 {'slug': '^'+match+'$'},
-                {'title': match},
+                {'title': '^'+match+'$'},
                 {'path': '/'+match+r'\.md$'},
-                {'path': '/'+match+r'/index\.md$'}]
-        elif '*' in match or '[' in match:
+                {'url': '/'+match+r'(?:\.html|/index\.html)$'}]
+        elif '*' in match or '[' in match or '+' in match:
             match = [{'title': match}, {'path': match}]
         else:
-            match = [{'title': match}]
+            match = r'\b' + match + r'\b'
+            match = re.sub(r'[ _]', r'[_ -]', match)
+            match = [{'title': match}, {'path': match}]
     def cb(html, **data):
         found = data['MDCONTENT'].page_match(
             match, ordering=ordering, limit=2)

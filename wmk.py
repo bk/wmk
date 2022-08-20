@@ -408,7 +408,11 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             source_file = os.path.join(root, fn)
             source_file_short = source_file.replace(ctdir, '', 1)
             with open(source_file) as f:
-                meta, doc = frontmatter.parse(f.read())
+                try:
+                    meta, doc = frontmatter.parse(f.read())
+                except Exception as e:
+                    raise Exception(
+                        "Error when parsing frontmatter for " + source_file + ': ' + str(e))
             if meta.get('draft', False) and not conf.get('render_drafts', False):
                 continue
             # data is global vars, page is specific to this markdown file
@@ -469,8 +473,10 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 page['slug'] = fn_parts[-1][:-3]
             # Ensure that title is present
             if not 'title' in page:
-                page['title'] = re.sub(r'[-_]', ' ', page['slug'])
-                page['title'] = re.sub(r'^[0-9 ]+', '', page['title']).strip() or '??'
+                page['title'] = fn.split('/')[-1]
+                page['title'] = re.sub(
+                    r'\.(?:md|markdown|mdwn|html?)$', '', page['title'], flags=re.I)
+                page['title'] = re.sub(r'[_ -]', ' ', page['title']).strip() or page['slug']
             fn = '/'.join(fn_parts)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)

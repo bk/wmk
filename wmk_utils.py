@@ -334,9 +334,9 @@ class MDContentList(list):
                 for k in ('title', 'slug'):
                     if k in x and not re.search(x[k], p.get(k, ''), flags=re.I):
                         return False
-                if 'url' in x and not re.search(x['url'], c['url']):
+                if 'url' in x and not re.search(x['url'], c['url'], flags=re.I):
                     return False
-                if 'path' in x and not re.search(x['path'], c['source_file_short']):
+                if 'path' in x and not re.search(x['path'], c['source_file_short'], flags=re.I):
                     return False
                 if 'doc' in x and not re.search(x['doc'], c['doc'], flags=re.I):
                     return False

@@ -11,6 +11,8 @@ import yaml
 import frontmatter
 import markdown
 import pypandoc
+import lunr
+import json
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
@@ -506,6 +508,8 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     template_vars['MDCONTENT'] = content
     for it in content:
         it['data']['MDCONTENT'] = content
+    if conf.get('lunr_index', False):
+        build_lunr_index(content, conf.get('lunr_index_fields', None))
     return content
 
 
@@ -665,6 +669,65 @@ def mako_shortcode(conf, ctx, nth=None):
     return replacer
 
 
+def build_lunr_index(content, index_fields):
+    """
+    Builds a search index compatible with lunr.js and writes it as '/idx.json'.
+    """
+    if not content:
+        return
+    if not index_fields or not isinstance(index_fields, dict):
+        index_fields = {'title': 5, 'body': 1}
+    frontmatter_fields = [k for k in index_fields if not k == 'body']
+    documents = []
+    summaries = {}
+    start = datetime.datetime.now()
+    for it in content:
+        if not it['url']:
+            continue
+        rec = {'id': it['url'].replace('/index.html', '/'), 'body': it['doc']}
+        if frontmatter_fields:
+            pg = it['data']['page']
+            for field in frontmatter_fields:
+                rec[field] = str(pg.get(field, ''))
+        documents.append(rec)
+        summaries[rec['id']] = lunr_summary(rec)
+    weights = [
+        {'field_name': k, 'boost': index_fields[k]}
+        for k in index_fields]
+    idx = lunr.lunr(ref='id', fields=weights, documents=documents)
+    idx = idx.serialize()
+    webroot = content[0]['data']['WEBROOT']
+    idx_file = os.path.join(webroot, 'idx.json')
+    summaries_file = os.path.join(webroot, 'idx.summaries.json')
+    with open(idx_file, 'w') as f:
+        json.dump(idx, f)
+    with open(summaries_file, 'w') as f:
+        json.dump(summaries, f)
+    end = datetime.datetime.now()
+    duration = str(end - start)
+    print('[%s] - lunr index: %s [build time: %s]' % (
+        str(end), '/idx.json', duration))
+
+def lunr_summary(rec):
+    ret = {'title': rec.get('title', rec['id'])}
+    for k in ('summary', 'intro', 'description'):
+        if k in rec and rec[k]:
+            ret['summary'] = rec[k]
+            break
+    if not 'summary' in rec:
+        summary = rec['body'] or ''
+        summary = re.sub(r'[#`\*]', '', summary)
+        summary = re.sub(r'====*', '', summary)
+        summary = re.sub(r'----*', '', summary)
+        summary = re.sub(r'\s+', ' ', summary)
+        summary = summary.replace('[TOC]', '')
+        summary = re.sub(r'\[(.*?)\][\[\(].*?[\]\)]', r'\1', summary)
+        summary = re.sub(r'{{<.*?>}}', '', summary)
+        summary = re.sub(r'<[^>]*>', r' ', summary)
+        summary = re.sub(r'\s+', ' ', summary)
+        summary = summary[:200].strip()
+        ret['summary'] = summary
+    return ret
 
 
 if __name__ == '__main__':

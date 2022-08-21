@@ -10,6 +10,7 @@ features:
 - Configurable shortcodes (and a few built-in ones).
 - Sass/SCSS support.
 - Support for themes.
+- Can be configured to generate a search index for use by `lunr.js`.
 
 [mako]: https://www.makotemplates.org/
 
@@ -254,6 +255,16 @@ support for the following settings:
 - `sass_output_style`: The output style for Sass/SCSS rendering. This should be
   one of `compact`, `compressed`, `expanded` or `nested`. The default is
   `expanded`.
+
+- `lunr_index`: If this is True, a search index for `lunr.js` is written as a
+  file named `idx.json` in the root of the `htdocs/` directory. Basic
+  information about each page (title and summary) is additionally written to
+  `idx.summaries.json`.
+
+- `lunr_index_fields`: The default fields for generating the lunr search index
+  are `title` and `body`. Additional fields and their weight can be configured
+  through this variable. For instance `{"title": 10, "tags": 5, "body": 1}`.
+  Aside from `body` the fields are assumed to be attributes of `page`.
 
 - `http`: This is is a dict for configuring the address used for `wmk serve`.
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
@@ -942,3 +953,12 @@ Typical usage of `paginate()`:
   ${ prevnext(len(chunks), curpage, page_urls) }
 % endif
 ```
+
+## A note on site search using `lunr.js`
+
+With `lunr_index` (and optionally `lunr_index_fields`) in `wmk_config.yaml`, wmk
+will build a search index for <a href="https://lunrjs.com/">Lunr</a>.
+However, since every website is different, it would be out of scope to include
+the necessary javascript and search forms as part of that process. It is up to
+the theme or site author to actually load the search index and present a search
+interface to  the user.

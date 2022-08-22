@@ -192,7 +192,11 @@ For further details on context variables set in the markdown frontmatter and in
 ## Config file
 
 A config file, `$basedir/wmk_config.yaml`, can be used to configure some aspects
-of how `wmk` operates. It must exist (but may be empty). Currently there is
+of how `wmk` operates. The name of the file may be changed by setting the
+environment variable `WMK_CONFIG` which should contain a filename without a
+leading directory path.
+
+The configuration file **must** exist (but may be empty). Currently there is
 support for the following settings:
 
 - `template_context`: Default values for the context passed to Mako templates.
@@ -264,11 +268,15 @@ support for the following settings:
 - `lunr_index_fields`: The default fields for generating the lunr search index
   are `title` and `body`. Additional fields and their weight can be configured
   through this variable. For instance `{"title": 10, "tags": 5, "body": 1}`.
-  Aside from `body` the fields are assumed to be attributes of `page`.
+  Aside from `body`, the fields are assumed to be attributes of `page`.
+
+- `lunr_languages`: A two-letter language code or a list of such codes,
+  indicating which language(s) to use for stemming when building a Lunr index.
+  The default language is `en`. See further at the end of this README.
 
 - `http`: This is is a dict for configuring the address used for `wmk serve`.
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
-  (default: 127.0.0.1).
+  (default: 127.0.0.1). Can also be set directly via command line options.
 
 - `mako_imports`: A list of Python statements to add to the top of each
   generated Mako template module file. Generally these are import statements.
@@ -954,11 +962,44 @@ Typical usage of `paginate()`:
 % endif
 ```
 
-## A note on site search using `lunr.js`
+## Site search using `lunr.js`
 
 With `lunr_index` (and optionally `lunr_index_fields`) in `wmk_config.yaml`, wmk
-will build a search index for <a href="https://lunrjs.com/">Lunr</a>.
-However, since every website is different, it would be out of scope to include
-the necessary javascript and search forms as part of that process. It is up to
-the theme or site author to actually load the search index and present a search
-interface to  the user.
+will build a search index for [Lunr](https://lunrjs.com/) and place it in
+`idx.json` in the webroot. In order to minimize its size, no metadata about
+each record is saved to the index. Instead, a simple list of pages (with title
+and summary) is placed in `idx.summaries.json`. The summary is taken either from
+one of the frontmatter fields `summary`, `intro` or `description` (in order of
+preference) or, failing that, from the start of the page body.
+
+If `lunr_languages` is present in `wmk_config.yaml`, stemming rules for those
+languages will be applied when building the index. The value may be a two-letter
+lowercase country code (ISO-639-1) or a list of such codes. The currently
+accepted languages are `de`, `da`, `en`, `fi`, `fr`, `hu`, `it`, `nl`, `no`,
+`pt`, `ro`, and `ru` (this is the intersection of the languages supported by
+`lunr.js` and NLTK, respecively). The default language is `en`. Attempting to
+specify a non-supported language will raise an exception.
+
+The index is built via the [`lunr.py`](https://lunr.readthedocs.io/en/latest/)
+module and the stemming support is provided by the Python [Natural Language
+Toolkit](https://www.nltk.org/).
+
+For information about the supported syntax of the search expression, see the
+[Lunr documentation](https://lunrjs.com/guides/searching.html).
+
+### Limitations
+
+- Building the index does not mean that the search functionality is complete. It
+  remains to point to `lunr.js` in the templates and write some javascript to
+  interface with it and display the results.  However, since every website is
+  different, this cannot be provided by wmk directly. It is up to the template
+  (or theme) author to actually load the index and present a search interface to
+  the user.
+
+- Similarly, if a "fancy" preview of results is required which cannot be fulfilled
+  using the information in `idx.summaries.json`, this must currently be solved
+  independently by the template/theme author.
+
+- Note that only the raw Markdown content is indexed, not the HTML after the
+  Markdown has been processed. The output of Mako templates (including shortcodes)
+  is not indexed either.

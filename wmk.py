@@ -40,12 +40,13 @@ def main(basedir=None, quick=False):
     basedir = os.path.realpath(basedir)
     if not os.path.isdir(basedir):
         raise Exception('{} is not a directory'.format(basedir))
-    if not os.path.exists(os.path.join(basedir, 'wmk_config.yaml')):
-        print(
-            'ERROR: {} does not contain a wmk_config.yaml'.format(
-                basedir))
+    conf_file = re.sub(
+        r'.*/', '', os.environ.get('WMK_CONFIG', '')) or 'wmk_config.yaml'
+    if not os.path.exists(os.path.join(basedir, conf_file)):
+        print('ERROR: {} does not contain a {}'.format(
+                basedir, conf_file))
         sys.exit(1)
-    dirs = get_dirs(basedir)
+    dirs = get_dirs(basedir, conf_file)
     ensure_dirs(dirs)
     sys.path.insert(0, dirs['python'])
     conf = get_config(basedir)
@@ -128,8 +129,8 @@ def get_dirs(basedir):
     }
 
 
-def get_config(basedir):
-    filename = os.path.join(basedir, 'wmk_config.yaml')
+def get_config(basedir, conf_file):
+    filename = os.path.join(basedir, conf_file)
     conf = {}
     if os.path.exists(filename):
         with open(filename) as f:
@@ -509,7 +510,9 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     for it in content:
         it['data']['MDCONTENT'] = content
     if conf.get('lunr_index', False):
-        build_lunr_index(content, conf.get('lunr_index_fields', None))
+        build_lunr_index(content,
+                         conf.get('lunr_index_fields', None),
+                         conf.get('lunr_languages', None))
     return content
 
 
@@ -669,7 +672,7 @@ def mako_shortcode(conf, ctx, nth=None):
     return replacer
 
 
-def build_lunr_index(content, index_fields):
+def build_lunr_index(content, index_fields, langs=None):
     """
     Builds a search index compatible with lunr.js and writes it as '/idx.json'.
     """
@@ -694,7 +697,19 @@ def build_lunr_index(content, index_fields):
     weights = [
         {'field_name': k, 'boost': index_fields[k]}
         for k in index_fields]
-    idx = lunr.lunr(ref='id', fields=weights, documents=documents)
+    known_langs = (
+        'de', 'da', 'en', 'fi', 'fr', 'hu', 'it', 'nl', 'no', 'pt', 'ro', 'ru')
+    if langs:
+        if instance(langs, str):
+            langs = [langs]
+        for lang in langs:
+            if not lang in known_langs:
+                raise Exception(
+                    "Unsupported language in lunr_languages: '%s'" % lang)
+        languages = {'languages': langs}
+    else:
+        langs = {}
+    idx = lunr.lunr(ref='id', fields=weights, documents=documents, **langs)
     idx = idx.serialize()
     webroot = content[0]['data']['WEBROOT']
     idx_file = os.path.join(webroot, 'idx.json')
@@ -715,7 +730,7 @@ def lunr_summary(rec):
             ret['summary'] = rec[k]
             break
     if not 'summary' in rec:
-        summary = rec['body'] or ''
+        summary = rec['body'][:1000] or ''
         summary = re.sub(r'[#`\*]', '', summary)
         summary = re.sub(r'====*', '', summary)
         summary = re.sub(r'----*', '', summary)

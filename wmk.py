@@ -46,10 +46,10 @@ def main(basedir=None, quick=False):
         print('ERROR: {} does not contain a {}'.format(
                 basedir, conf_file))
         sys.exit(1)
-    dirs = get_dirs(basedir, conf_file)
+    dirs = get_dirs(basedir)
     ensure_dirs(dirs)
     sys.path.insert(0, dirs['python'])
-    conf = get_config(basedir)
+    conf = get_config(basedir, conf_file)
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))

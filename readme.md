@@ -881,8 +881,11 @@ All of these return a new `MDContentList` object.
   `match_expr` contains the filtering specification. It will be described
   further below. The `ordering` parameter, if specified, should be either
   `title`, `slug`, `url` or `date`, with an optional `-` in front to indicate
-  reverse ordering. The `limit`, if specified, indicates the maximum number of
-  pages to return.
+  reverse ordering. The `date` option for `ordering` may be followed by the
+  preferred frontmatter date field after a colon, e.g.
+  `ordering='-date:modified_date'` for a list with the most recently changed
+  files at the top. The `limit`, if specified, obviously indicates the maximum
+  number of pages to return.
 
 A `match_expr` for `page_match()` is either a dict or a list of dicts.  If it is
 a dict, each page in the result set must match each of the attributes specified

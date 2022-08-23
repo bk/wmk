@@ -329,7 +329,7 @@ class MDContentList(list):
             def pred(c):
                 x = match_expr
                 p = c['data']['page']
-                if 'exclude_url' in x and it['url'] == x['exclude_url']:
+                if 'exclude_url' in x and c['url'] == x['exclude_url']:
                     return False
                 for k in ('title', 'slug'):
                     if k in x and not re.search(x[k], p.get(k, ''), flags=re.I):
@@ -390,8 +390,13 @@ class MDContentList(list):
             elif ordering == 'url':
                 k = lambda x: x.get('url', 'zzz')
                 found = MDContentList(sorted(found, key=k, reverse=reverse))
-            elif ordering == 'date':
-                found = found.sorted_by_date(newest_first=reverse)
+            elif ordering.startswith('date'):
+                if ':' in ordering:
+                    dateorder, datefield = ordering.split(':')
+                else:
+                    datefield = 'DATE'
+                found = found.sorted_by_date(
+                    newest_first=reverse, date_key=datefield)
             else:
                 raise Exception('Unknown ordering for page_match: %s' % ordering)
         if limit and len(found) > limit:

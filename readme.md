@@ -962,6 +962,35 @@ Typical usage of `paginate()`:
 % endif
 ```
 
+### Render to an arbitrary file
+
+- `def write_to(self, dest, context, extra_kwargs=None, template=None)`:
+  Calls a template with the `MDContentList` in `self` as the value of `CHUNK`
+  and write the result to the file named in `dest`. The file is of course
+  relative to the webroot.  Any directories are created if necessary. The
+  `template` is by default the calling template while `extra_kwargs` may be
+  added if desired.
+
+Typical usage of `write_to()`:
+
+```mako
+<%
+  if not CHUNK:
+     for tag in tags:
+         tagged = MDCONTENT.has_tag([tag])
+         if not tagged:
+             continue  # avoid potential infinite loop!
+         outpath = '/tags/' + slugify(tag) + '/index.html'
+         tagged.write_to(outpath, context, {'TAG': tag})
+%>
+
+% if CHUNK:
+  ${ list_tagged_pages(TAG, CHUNK) }
+% else:
+  ${ list_tags() }
+% endif
+```
+
 ## Site search using `lunr.js`
 
 With `lunr_index` (and optionally `lunr_index_fields`) in `wmk_config.yaml`, wmk

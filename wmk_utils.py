@@ -398,6 +398,32 @@ class MDContentList(list):
             found = found[:limit]
         return found
 
+    def write_to(self, dest, context, extra_kwargs=None, template=None):
+        """
+        Add self to the context as 'CHUNK' and call the calling template again
+        (or a different template if 'template' is specified), putting the result
+        in dest. Directories are created if necessary. Useful for tag pages and
+        such. Minimal usage in a template:
+
+          mdcontent_chunk.write_to('/my/path/index.html', context)
+
+        Note that the calling template must be careful to avoid infinite loops.
+        """
+        if extra_kwargs is None:
+            extra_kwargs = {}
+        if template is None:
+            template = context.get('SELF_TEMPLATE')
+        full_path = os.path.join(context.get('WEBROOT'), dest.strip('/'))
+        dest_dir = re.sub(r'/[^/]+$', '', full_path)
+        if not os.path.exists(dest_dir):
+            os.makedirs(dest_dir)
+        tpl = context.lookup.get_template(template)
+        kw = dict(**context.kwargs)
+        kw['SELF_URL'] = dest
+        kw['CHUNK'] = self
+        with open(full_path, 'w') as f:
+            f.write(tpl.render(**kw, **extra_kwargs))
+
     def paginate(self, pagesize=5, context=None):
         """
         Divides the page list into chunks of size `pagesize` and returns
@@ -409,6 +435,8 @@ class MDContentList(list):
         '_page' variable for the current page to be rendered (this defaults to
         1). Each iteration will get all chunks and must use this variable to
         limit itself appriopriately.
+
+        TODO: Rewrite this in terms of write_to().
         """
         page_urls = None
         chunks = [self[i:i+pagesize] for i in range(0, len(self), pagesize)] or [[]]

@@ -11,8 +11,13 @@ BASEDIR="$2"
 QUICK=""
 SERVEPORT=""
 SERVEIP=""
-WMK_CONF="$BASEDIR/wmk_config.yaml"
 CACHE_FILE="/tmp/wmk_render_cache.$(id -u).db"
+if [ "$WMK_CONFIG" = "" ]; then
+    WMK_CONF_PATH="$BASEDIR/wmk_config.yaml"
+    WMK_CONFIG=wmk_config.yaml
+else
+    WMK_CONF_PATH="$BASEDIR/$WMK_CONFIG"
+fi
 
 . "$WMK_HOME/venv/bin/activate"
 
@@ -41,9 +46,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 wmk_http_conf(){
-    if test -s "$WMK_CONF"
+    if test -s "$WMK_CONF_PATH"
     then
-        python3 -c "import yaml;c=yaml.safe_load(open('$WMK_CONF'));print(c.get('http',{}).get('$1','$2'));"
+        python3 -c \
+            "import yaml;c=yaml.safe_load(open('$WMK_CONF_PATH'));print(c.get('http',{}).get('$1','$2'));"
     else
         echo "$2"
     fi
@@ -91,8 +97,8 @@ then
             else
                 PORT=$SERVEPORT
             fi
-            if [[ ! -e "$BASEDIR/wmk_config.yaml" ]]; then
-                echo "WARNING: wmk_config.yaml not found!"
+            if [[ ! -e "$WMK_CONF_PATH" ]]; then
+                echo "WARNING: $WMK_CONFIG not found!"
             fi
             if [[ ! -e "$BASEDIR/htdocs" ]]; then
                 echo "WARNING: no $(realpath "$BASEDIR")/htdocs found!"
@@ -105,7 +111,8 @@ then
         w|watch)
             cd "$BASEDIR" || exit 1
             while true; do
-                inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r .
+                inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r \
+                    ./assets ./content ./templates ./data ./py ./static ./templates ./themes ./$WMK_CONFIG
                 "$WMK_HOME/wmk.py" "$BASEDIR"
             done
             ;;

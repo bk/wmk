@@ -54,9 +54,11 @@ usage(){
     echo "Usage:"
     echo "  wmk build|watch <dirname> [-q|--quick]"
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
+    echo "  wmk watch-serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache"
-    echo "Action abbrevs: b|r|run=build; w=watch; s=serve; c=clear-cache"
+    echo "Action abbrevs: "
+    echo "  b|r|run=build; w=watch; s=serve; ws=watch-serve; c=clear-cache"
     echo "See $WMK_HOME/readme.md for documentation"
 }
 
@@ -67,6 +69,12 @@ clean_cache(){
     else
         echo "No cache file found"
     fi
+}
+
+watch_and_serve(){
+    echo "$0 s '$BASEDIR' -p '$PORT' -i '$IP'"
+    echo "$0 w '$BASEDIR'"
+    (trap 'kill 0' SIGINT; "$0" s "$BASEDIR" -p "$PORT" -i "$IP" & "$0" w "$BASEDIR")
 }
 
 if test -d "$BASEDIR"
@@ -100,6 +108,9 @@ then
                 inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r .
                 "$WMK_HOME/wmk.py" "$BASEDIR"
             done
+            ;;
+        ws|watch-serve)
+            watch_and_serve
             ;;
         debug|env|info)
             echo "WMK ENVIRONMENT:"

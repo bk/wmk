@@ -63,6 +63,9 @@ file organization.
   port can be modified with the `-p` and `-i` switches or be be configured via
   `wmk_config.yaml` – see below). Synonyms for `serve` are `srv` and `s`.
 
+- `wmk watch-serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Combines
+  `watch` and `serve` in one command. Synonym: `ws`.
+
 - `wmk clear-cache`: Remove the HTML rendering cache, which is a SQLite file in
   `/tmp/`. This should only be necessary in case of changed shortcodes or
   shortcode dependencies. Note that the cache can be disabled in `wmk_config.yaml`

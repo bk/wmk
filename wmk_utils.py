@@ -504,8 +504,15 @@ class RenderCache:
     SQL_INS = "INSERT INTO cache (key, val) VALUES (:key, :val)"
     SQL_UPD = "UPDATE cache SET val = :val, upd = strftime('%s', 'now') WHERE key = :key"
 
-    def __init__(self, doc, optstr=''):
-        self.filename = '/tmp/wmk_render_cache.%d.db' % os.getuid()
+    def __init__(self, doc, optstr='', projdir=None):
+        if not projdir:
+            cachedir = '/tmp'
+        else:
+            cachedir = os.path.join(projdir, 'tmp')
+            if not os.path.exists(cachedir):
+                os.mkdir(cachedir)
+        self.filename = os.path.join(
+            cachedir, 'wmk_render_cache.%d.db') % os.getuid()
         need_init = not os.path.exists(self.filename)
         self.db = sqlite3.connect(self.filename)
         self.cur = self.db.cursor()

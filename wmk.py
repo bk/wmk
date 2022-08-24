@@ -23,6 +23,9 @@ from wmk_utils import slugify, attrdict, MDContentList, RenderCache
 import wmk_mako_filters as wmf
 
 
+VERSION = 0.9
+
+
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
 KNOWN_DATE_KEYS = (
@@ -265,7 +268,8 @@ def render_markdown(ct, conf):
         optstr = str([target, extensions, extension_configs,
                       is_pandoc, pandoc_filters, pandoc_options,
                       pandoc_input, pandoc_output])
-        cache = RenderCache(doc, optstr)
+        projectdir = ct['data']['DATADIR'][:-5] # remove /data from the end
+        cache = RenderCache(doc, optstr, projectdir)
         ret = cache.get_cache()
         if ret:
             return ret
@@ -746,6 +750,9 @@ def lunr_summary(rec):
 
 
 if __name__ == '__main__':
+    if sys.argv[1] == '--version':
+        print('wmk version {}'.format(VERSION))
+        sys.exit()
     basedir = sys.argv[1] if len(sys.argv) > 1 else None
     quick = True if len(sys.argv) > 2 and sys.argv[2] in ('-q', '--quick') else False
     main(basedir, quick)

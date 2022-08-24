@@ -60,7 +60,7 @@ docker run --rm --volume $(pwd):/data --user $(id -u):$(id -g) wmk b .
 to build the wmk project in the current directory, or
 
 ```shell
-docker run --rm -i -t --volume $(pwd):/data --user $(id -u):$(id -g) -p 7007:7007 wmk ws .
+docker run --rm -i -t --volume $(pwd):/data --user $(id -u):$(id -g) -p 7007:7007 wmk ws . -i 0.0.0.0
 ```
 
 to watch for changes in the current directory and run a webserver for the built
@@ -86,8 +86,9 @@ file organization.
   `run`, `b` and `r`.
 
 - `wmk watch $basedir`: Watches for changes in the source directories inside
-  `$basedir` and recompiles if changes are detected. A synonym for `watch` is
-  `w`.
+  `$basedir` and recompiles if changes are detected. (Note that `build` is not
+  performed automatically before setting up file wathcing, so you may want to
+  run that first). A synonym for `watch` is `w`.
 
 - `wmk serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Serves the
   files in `$basedir/htdocs` on `http://127.0.0.1:7007/` by default. The IP and
@@ -97,10 +98,11 @@ file organization.
 - `wmk watch-serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Combines
   `watch` and `serve` in one command. Synonym: `ws`.
 
-- `wmk clear-cache`: Remove the HTML rendering cache, which is a SQLite file in
-  `/tmp/`. This should only be necessary in case of changed shortcodes or
-  shortcode dependencies. Note that the cache can be disabled in `wmk_config.yaml`
-  or on file-by-file basis via a frontmatter setting (`no_cache`).
+- `wmk clear-cache $basedir`: Remove the HTML rendering cache, which is a SQLite
+  file in `$basedir/tmp/`. This should only be necessary in case of changed
+  shortcodes or shortcode dependencies. Note that the cache can be disabled in
+  `wmk_config.yaml` by setting `use_cache` to `false`, or on file-by-file basis
+  via a frontmatter setting (`no_cache`). A synonym for `clear-cache` is `c`.
 
 ## File organization
 

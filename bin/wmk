@@ -11,7 +11,7 @@ BASEDIR="$2"
 QUICK=""
 SERVEPORT=""
 SERVEIP=""
-CACHE_FILE="/tmp/wmk_render_cache.$(id -u).db"
+CACHE_FILE="$BASEDIR/tmp/wmk_render_cache.$(id -u).db"
 if [ "$WMK_CONFIG" = "" ]; then
     WMK_CONF_PATH="$BASEDIR/wmk_config.yaml"
     WMK_CONFIG=wmk_config.yaml
@@ -20,6 +20,12 @@ else
 fi
 
 . "$WMK_HOME/venv/bin/activate"
+
+
+if [ "$ACTION" = "--version" ]; then
+    "$WMK_HOME/wmk.py" "--version"
+    exit
+fi
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -62,7 +68,7 @@ usage(){
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk watch-serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk info|env|debug <dirname>"
-    echo "  wmk clear-cache"
+    echo "  wmk clear-cache <dirname>"
     echo "Action abbrevs: "
     echo "  b|r|run=build; w=watch; s=serve; ws=watch-serve; c=clear-cache"
     echo "See $WMK_HOME/readme.md for documentation"
@@ -149,8 +155,6 @@ then
             exit 1
             ;;
     esac
-elif [[ "$ACTION" =~ ^(c|cl|clea[rn]|clea[rn]-cache)$ ]]; then
-    clean_cache
 else
     usage
     exit 1

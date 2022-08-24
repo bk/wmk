@@ -14,7 +14,9 @@ features:
 
 [mako]: https://www.makotemplates.org/
 
-## Getting ready
+## Installation
+
+### Method 1: local
 
 Clone this repo into your chosen location (`$myrepo`) and install the necessary
 Python modules into a virtual environment:
@@ -37,6 +39,35 @@ Required software (aside from Python, of course):
 
 `wmk` requires a Unix-like environment. In particular, the directory separator
 is assumed to be `/`.
+
+### Method 2: Docker
+
+If you are not on Linux it may be a better option for you to run wmk via Docker.
+In that case, after cloning the repo (or simply copying the `Dockerfile` from
+it) you can give the command
+
+```shell
+docker build -t wmk .
+```
+
+in order to build an image called `wmk`. You can then run the various wmk
+subcommands via Docker, for instance
+
+```shell
+docker run --rm --volume $(pwd):/data --user $(id -u):$(id -g) wmk b .
+```
+
+to build the wmk project in the current directory, or
+
+```shell
+docker run --rm -i -t --volume $(pwd):/data --user $(id -u):$(id -g) -p 7007:7007 wmk ws .
+```
+
+to watch for changes in the current directory and run a webserver for the built
+files.
+
+Obviously, such commands can be unwieldy, so if you run them regularly you may
+want to create aliases or wrappers for them.
 
 ## Usage
 

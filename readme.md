@@ -467,7 +467,9 @@ The following default shortcodes are provided by the `wmk` installation:
   no matching page is found: `(LINKTO: page not found)` by default; the
   boolean `unique`, which if set to True causes a fatal error to be raised if
   multiple pages are found to match; and `link_attr`, which is a string to
-  insert into the `<a>` tag (by default `class="linkto"`).
+  insert into the `<a>` tag (by default `class="linkto"`). A query string or
+  anchor ID fragment for the link can be added via `link_append`, e.g.
+  `link_append='#section2'` or `link_append='?q=searchstring'`.
 
 - `pagelist`: Runs a `page_match()` and lists the found pages. Required argument:
   `match_expr`. Optional arguments: `ordering`, `limit`, `template`. The default

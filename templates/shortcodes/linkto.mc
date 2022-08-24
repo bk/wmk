@@ -1,14 +1,16 @@
-<%page args="match, label=None, ordering=None, fallback=None, unique=False, link_attr=None" />\
+<%page args="match, label=None, ordering=None, fallback=None, unique=False, link_attr=None, link_append=None" />\
 <%!
 import re
 default_fallback = '(LINKTO: page not found for "%s")'
 
-def linkto_handler(match, label, ordering, fallback, unique, link_attr, nth):
+def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_append, nth):
     placeholder = '((LINKTO::%d))' % nth
     if not fallback:
         fallback = default_fallback % str(match)
     if link_attr is None:
         link_attr = 'class="linkto"'
+    if link_append is None:
+        link_append = ''
     if isinstance(match, str):
         # heuristics for interpreting the match pattern before
         # passing to page_match()
@@ -45,9 +47,10 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, nth):
             raise Exception(
                 'LINKTO: multiple matches found for "%s"' % str(match))
         elif found:
-            repl = '<a %s href="%s">%s</a>'  % (
+            repl = '<a %s href="%s%s">%s</a>'  % (
                 link_attr,
                 found[0]['url'],
+                link_append,
                 (label or found[0]['data']['page'].title))
         return html.replace(placeholder, repl)
     return cb
@@ -56,6 +59,6 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, nth):
 if not 'POSTPROCESS' in page:
     page.POSTPROCESS = []
 page.POSTPROCESS.append(
-    linkto_handler(match, label, ordering, fallback, unique, link_attr, nth))
+    linkto_handler(match, label, ordering, fallback, unique, link_attr, link_append, nth))
 %>\
 ((LINKTO::${nth}))\

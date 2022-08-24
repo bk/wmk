@@ -78,8 +78,16 @@ clean_cache(){
 }
 
 watch_and_serve(){
-    echo "$0 s '$BASEDIR' -p '$PORT' -i '$IP'"
-    echo "$0 w '$BASEDIR'"
+    if [ "$SERVEIP" == "" ]; then
+        IP=$(wmk_http_conf ip 127.0.0.1)
+    else
+        IP=$SERVEIP
+    fi
+    if [ "$SERVEPORT" == "" ]; then
+        PORT=$(wmk_http_conf port 7007)
+    else
+        PORT=$SERVEPORT
+    fi
     (trap 'kill 0' SIGINT; "$0" s "$BASEDIR" -p "$PORT" -i "$IP" & "$0" w "$BASEDIR")
 }
 

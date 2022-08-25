@@ -23,7 +23,7 @@ from wmk_utils import slugify, attrdict, MDContentList, RenderCache
 import wmk_mako_filters as wmf
 
 
-VERSION = 0.9
+VERSION = '0.9.1'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -292,7 +292,29 @@ def render_markdown(ct, conf):
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
+        if use_cache and pg.get('POSTPROCESS', None):
+            use_cache = False
+            print("NOTE [%s]: postprocessing, not caching %s"
+                  % (str(datetime.datetime.now()), ct['url']))
     if is_pandoc:
+        # For TOC to be added, page.toc must be True and the
+        # markdown content must have a '[TOC]' line
+        need_toc = (
+            pg.get('toc', False)
+            and re.search(r'^\[TOC\]$', doc, flags=re.M))
+        if need_toc:
+            if not pandoc_options:
+                pandoc_options = []
+            pandoc_options.append('--toc')
+            pandoc_options.append('--standalone')
+            toc_depth = ct['data']['page'].get('toc_depth')
+            if toc_depth:
+                pandoc_options.append('--toc-depth=%s' % toc_depth)
+            toc_tpl = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                'aux',
+                'pandoc-toc-only.html')
+            pandoc_options.append('--template=%s' % toc_tpl)
         popt = {}
         if pandoc_filters:
             popt['filters'] = pandoc_filters
@@ -300,10 +322,15 @@ def render_markdown(ct, conf):
             popt['extra_args'] = pandoc_options
         ret = pypandoc.convert_text(
             doc, pandoc_output, format=pandoc_input, **popt)
+        if need_toc:
+            offset = ret.find('</nav>') + 6
+            toc = ret[:offset]
+            ret = re.sub(r'<p>\[TOC\]</p>', toc, ret[offset:], flags=re.M)
     else:
         ret = markdown.markdown(
             doc, extensions=extensions, extension_configs=extension_configs)
-    if cache:
+    if cache and use_cache:
+        # TODO: Delay cache saving until postprocessing is done.
         cache.write_cache(ret)
     return ret
 

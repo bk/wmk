@@ -247,11 +247,6 @@ support for the following settings:
   (so that the `draft` status flag is ignored) by setting `render_drafts` to True
   in the config file.
 
-- `pandoc`: Normally [Python-Markdown][pymarkdown] is used for Markdown
-  processing, but if this boolean setting is true, then Pandoc via
-  [Pypandoc][pypandoc] is used by default instead. This can be turned off or on
-  through frontmatter variables as well.
-
 - `markdown_extensions`: A list of [extensions][ext] to enable for markdown
   processing by Python-Markdown. The default is `['extra', 'sane_lists']`.
   If you specify [third-party extensions][other] here, you have to install them
@@ -271,6 +266,11 @@ support for the following settings:
   - If `wikilinks` is in `markdown_extensions` then the options specified
     in the `wikilinks` frontmatter setting will be passed on to the extension.
     Example: `wikilinks: {'base_url': '/somewhere'}`.
+
+- `pandoc`: Normally [Python-Markdown][pymarkdown] is used for Markdown
+  processing, but if this boolean setting is true, then Pandoc via
+  [Pypandoc][pypandoc] is used by default instead. This can be turned off or on
+  through frontmatter variables as well.
 
 - `pandoc_filters`, `pandoc_options`: Lists of filters and options for Pandoc.
   Has no effect unless `pandoc` is true. May be set or overridden through
@@ -336,6 +336,34 @@ support for the following settings:
 [pypandoc]: https://github.com/NicklasTegner/pypandoc
 [ext]: https://python-markdown.github.io/extensions/
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions
+
+
+## A note on Pandoc
+
+Pandoc's variant of Markdown is very featureful and sophisticated, but since its
+use involves spawning an external process for each Markdown file being
+converted, it is quite a bit slower than Python-Markdown. Therefore, it is
+only recommended if you really do need it. Often, even if you do need it, it can
+be turned on for individual pages rather than for the entire site.
+
+If you decide to use Pandoc for a medium or large site, it is recommended to
+turn the `use_cache` setting on in the configuration file. Note, however, that
+currently caching is not applied to files that are to be postprocessed after
+being converted to HTML. The most common reason for this is that you are using
+either the `linkto()` or the `pagelist()` shortcode in the page.
+
+The `markdown_extensions` setting will of course not affect `pandoc`, but there
+is one extension which is partially emulated in `wmk`'s Pandoc setup, namely
+[toc](https://python-markdown.github.io/extensions/toc/).
+
+If the `toc` frontmatter variable is true and the string `[TOC]` is
+present on a separate line in a Markdown document which is to be processed by
+pandoc, then it will be asked to generate a table of contents which will be
+placed in the indicated location, just like the `toc` extension for
+Python-Markdown does. The `toc_depth` setting (whose default value is 3) is
+respected as well, although only in its integer form and not as a range (such as
+`"2-4"`).
+
 
 ## Available themes
 

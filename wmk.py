@@ -23,7 +23,7 @@ from wmk_utils import slugify, attrdict, MDContentList, RenderCache
 import wmk_mako_filters as wmf
 
 
-VERSION = '0.9.1'
+VERSION = '0.9.2'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -200,6 +200,12 @@ def process_markdown_content(content, lookup, conf, force):
         data['CONTENT'] = html
         data['RAW_CONTENT'] = ct['doc']
         page = data['page']
+        if page.POSTPROCESS and page._CACHER:
+            for pp in page.POSTPROCESS:
+                html = pp(html, **data)
+            page._CACHER(html)
+            ct['rendered'] = html
+            data['CONTENT'] = html
         html_output = ''
         try:
             html_output = template.render(**data)
@@ -292,10 +298,6 @@ def render_markdown(ct, conf):
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
-        if use_cache and pg.get('POSTPROCESS', None):
-            use_cache = False
-            print("NOTE [%s]: postprocessing, not caching %s"
-                  % (str(datetime.datetime.now()), ct['url']))
     if is_pandoc:
         # For TOC to be added, page.toc must be True and the
         # markdown content must have a '[TOC]' line
@@ -329,8 +331,10 @@ def render_markdown(ct, conf):
     else:
         ret = markdown.markdown(
             doc, extensions=extensions, extension_configs=extension_configs)
-    if cache and use_cache:
-        # TODO: Delay cache saving until postprocessing is done.
+    if cache and pg.POSTPROCESS:
+        # Delay caching until just before calling the template
+        pg._CACHER = lambda x: cache.write_cache(x)
+    elif cache:
         cache.write_cache(ret)
     return ret
 

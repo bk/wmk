@@ -6,7 +6,9 @@
 #
 # For serve|watch|watch-serve you should add "-i -t" after "--rm"
 # so as to be able to stop the process with Ctrl-C, as well as a
-# port mapping, e.g. "-p 8008:7007"
+# port mapping, e.g. "-p 8008:7007". Also, you need to supply
+# "-i 0.0.0.0" to the ws/s command so that the container's port
+# is visible to the outside.
 
 # Base image
 FROM python:3.10.6-slim-buster
@@ -32,7 +34,7 @@ RUN . venv/bin/activate \
   && pip install --upgrade pip \
   && pip install -r requirements.txt
 
-# This will be used as a moint point for the wmk workdir
+# This will be used as a mount point for the wmk workdir
 RUN mkdir /data
 WORKDIR /data
 

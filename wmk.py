@@ -22,8 +22,10 @@ from mako.runtime import Undefined
 from wmk_utils import slugify, attrdict, MDContentList, RenderCache
 import wmk_mako_filters as wmf
 
+# To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
+autoload = {}
 
-VERSION = '0.9.2'
+VERSION = '0.9.3'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -52,6 +54,11 @@ def main(basedir=None, quick=False):
     dirs = get_dirs(basedir)
     ensure_dirs(dirs)
     sys.path.insert(0, dirs['python'])
+    global autoload
+    try:
+        from wmk_autoload import autoload
+    except:
+        pass
     conf = get_config(basedir, conf_file)
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
@@ -65,6 +72,14 @@ def main(basedir=None, quick=False):
             os.path.join(themedir, 'static'), dirs['output']))
     if themedir and os.path.exists(os.path.join(themedir, 'py')):
         sys.path.insert(1, os.path.join(themedir, 'py'))
+        try:
+            from wmk_theme_autoload import autoload as theme_autoload
+            for k in theme_autoload:
+                if k in autoload:
+                    continue
+                autoload[k] = theme_autoload[k]
+        except:
+            pass
     os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # support content bundles (mainly images inside content dir)
     os.system(
@@ -200,9 +215,17 @@ def process_markdown_content(content, lookup, conf, force):
         data['CONTENT'] = html
         data['RAW_CONTENT'] = ct['doc']
         page = data['page']
+        global autoload
         if page.POSTPROCESS and page._CACHER:
             for pp in page.POSTPROCESS:
-                html = pp(html, **data)
+                if isinstance(pp, str):
+                    if autoload and pp in autoload:
+                        html = autoload[pp](html, **data)
+                    else:
+                        print("WARNING: postprocess action '%s' missing for %s"
+                              % (pp, ct['url']))
+                else:
+                    html = pp(html, **data)
             page._CACHER(html)
             ct['rendered'] = html
             data['CONTENT'] = html
@@ -298,6 +321,20 @@ def render_markdown(ct, conf):
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
+    ## May be added as a callable by shortcodes, or as a string pointing to an
+    ## entry in autoload
+    if pg.PREPROCESS:
+        global autoload
+        pg.is_pandoc = is_pandoc
+        for pp in pg.PREPROCESS:
+            if isinstance(pp, str):
+                if autoload and pp in autoload:
+                    doc = autoload[pp](doc, pg)
+                else:
+                    print("WARNING: Preprocessor '%s' not present for %s"
+                          % (pp, ct['source_file_short']))
+            else:
+                doc = pp(doc, pg)
     if is_pandoc:
         # For TOC to be added, page.toc must be True and the
         # markdown content must have a '[TOC]' line

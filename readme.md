@@ -428,7 +428,8 @@ either of these must place a (potential) placeholder in the Markdown source as
 well as a callback in `page.POSTPROCESS`. Each callback in this list will be
 called just before the generated HTML is written to `htdocs/`, receiving the
 full HTML as a first argument followed by the rest of the context for the page.
-Examples of such shortcodes are `linkto` and `pagelist`, described below.
+Examples of such shortcodes are `linkto` and `pagelist`, described below. See
+also the discussion of `page.POSTPROCESS` and `page.PREPROCESS` below.
 
 Here is an example of a shortcode in Markdown:
 
@@ -674,6 +675,21 @@ files is `md_base.mhtml`.
   `page.pandoc_filters`, `page.pandoc_options`, `page.pandoc_input_format`,
   `page.pandoc_output_format`: See the description of these options in the
   section on the configuration file, above.
+
+- `page.POSTPROCESS`: This contains a list of processing instructions which are
+  called on the rendered HTML just before writing it to the output directory.
+  Each instruction is either a function (placed into `POSTPROCESS` by a
+  shortcode) or a string (possibly specified in the frontmatter). If the latter,
+  it points to a function entry in the `autoload` dict imported from either the
+  project's `py/wmk_autoload.py` file or the theme's `py/wmk_theme_autoload.py`
+  file.  In either case, the function receives the html as the first argument
+  while the rest of the arguments constitute the template context. It should
+  return the processed html.
+
+- `page.PREPROCESS`: This is analogous to `page.POSTPROCESS`, except that the
+  instructions in the list are applied to the Markdown just before converting it
+  to HTML. The function receives two arguments: the Markdown document text and
+  the `page` object. It should return the altered Markdown.
 
 Note that if two files in the same directory have the same slug, they may both
 be rendered to the same output file; it is unpredictable which of them will go

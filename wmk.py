@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.3'
+VERSION = '0.9.4'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -755,6 +755,14 @@ def build_lunr_index(content, index_fields, langs=None):
     frontmatter_fields = [k for k in index_fields if not k == 'body']
     documents = []
     summaries = {}
+    webroot = content[0]['data']['WEBROOT']
+    idx_file = os.path.join(webroot, 'idx.json')
+    # Avoid regenerating index file unless necessary
+    if os.path.exists(idx_file):
+        newest = sorted([_['data']['MTIME'] for _ in content], reverse=True)[0]
+        idx_ts = datetime.datetime.fromtimestamp(os.path.getmtime(idx_file))
+        if idx_ts > newest:
+            return
     start = datetime.datetime.now()
     for it in content:
         if not it['url']:
@@ -783,8 +791,6 @@ def build_lunr_index(content, index_fields, langs=None):
         langs = {}
     idx = lunr.lunr(ref='id', fields=weights, documents=documents, **langs)
     idx = idx.serialize()
-    webroot = content[0]['data']['WEBROOT']
-    idx_file = os.path.join(webroot, 'idx.json')
     summaries_file = os.path.join(webroot, 'idx.summaries.json')
     with open(idx_file, 'w') as f:
         json.dump(idx, f)

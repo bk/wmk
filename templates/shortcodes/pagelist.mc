@@ -20,6 +20,9 @@ def pagelist_handler(match_expr, ordering, limit, template, fallback, nth, looku
 <%
 if not 'POSTPROCESS' in page:
     page.POSTPROCESS = []
+# A page with a pagelist() should never be cached,
+# regardless of the use_cache setting.
+page.no_cache = True
 if template_args is None:
     template_args = {}
 page.POSTPROCESS.append(

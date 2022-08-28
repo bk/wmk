@@ -1,0 +1,68 @@
+<%inherit file="../base.mhtml"/>
+
+<%def name="page_title()">${ CURRENT_TAG if CURRENT_TAG else 'Tags' }</%def>
+
+<%block name="content">
+
+% if CHUNK:
+
+  <h1>${ CURRENT_TAG }</h1>
+
+  <p>Pages with this tag:</p>
+
+  <ul class="pagelist">
+    % for it in sorted(CHUNK, key=lambda x: x['data']['page'].title):
+      <li><a href="${it['url']}">${it['data']['page'].title}</a></li>
+    % endfor
+  </ul>
+
+% else:
+
+  <%
+    # First list all tags.
+    all_tags = set()
+    tagcount = {}
+    for it in MDCONTENT:
+        if it['data']['page'].tags:
+            for tag in it['data']['page'].tags:
+                if not tag.lower() in tagcount:
+                    tagcount[tag.lower()] = 1
+                else:
+                    tagcount[tag.lower()] += 1
+                all_tags.add(tag)
+    # Tags are treated as case insensitive, but if two forms have been
+    # used, we prefer the upper case one for display, so we sort accordingly.
+    all_tags_list = sorted([_ for _ in all_tags])
+    tags_ics = {}
+  %>
+  % if not all_tags:
+    <h1>No tags yet</h1>
+    <p>There are no tags yet. Please tag your content in the YAML frontmatter of your pages, like this:
+    </p>
+    <pre><code>tags:
+    - interesting
+    - noteworthy</code></pre>
+    <% return '' %>
+  % endif
+  <h1>Active tags</h1>
+  <p>The following tags are currently in use in published content:</p>
+  <ul>
+  % for tag in all_tags_list:
+    % if not tag in tags_ics:
+      <li><a href="/tags/${ tag | slugify }/">${ tag  }</a> (${ tagcount[tag.lower()] })</li>
+    % endif
+    <% tags_ics[tag.lower()] = tag %>
+  % endfor
+  </ul>
+  <%
+    # Now create an HTML file for each tag.
+    for tag in tags_ics:
+        tagged = MDCONTENT.has_tag([tag])
+        if len(tagged):
+            dest = '/tags/' + slugify(tag) + '/index.html'
+            tagged.write_to(dest, context, {'CURRENT_TAG': tags_ics[tag]})
+  %>
+
+% endif
+
+</%block>

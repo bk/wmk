@@ -83,6 +83,38 @@ clean_cache(){
     fi
 }
 
+init(){
+    tpl_src="$WMK_HOME/init-files/templates"
+    conf_src="$WMK_HOME/init-files/wmk_config.sample.yaml"
+    status="none"
+    copied=""
+    if [ ! -d "$BASEDIR/content" ] || [ "$(ls -A ""$BASEDIR/content"")" = "" ]; then
+        echo "$BASEDIR/content does not exist or is empty."
+        echo "Please call wmk init again after you have some content."
+        exit 1
+    fi
+    if [ -d "$BASEDIR/templates" ] && [ "$(ls -A ""$BASEDIR/templates"")" ]; then
+        echo "WARNING: Not copying templates: directory not empty"
+    else
+        rsync -a "$tpl_src" "$BASEDIR/"
+        status="ok"
+        copied="$copied templates"
+    fi
+    if [ -e "$BASEDIR/wmk_config.yaml" ]; then
+        echo "WARNING: Not copying wmk_config.yaml"
+    else
+        cp "$conf_src" "$BASEDIR/wmk_config.yaml"
+        copied="$copied wmk_config"
+    fi
+    if [ "$status" == "ok" ]; then
+        echo "DONE: $copied"
+        echo "Now run wmk b ""$BASEDIR"""
+    else
+        echo "init: Nothing to do."
+        echo "      You already appear ready to use wmk in $BASEDIR"
+    fi
+}
+
 watch_and_serve(){
     if [ "$SERVEIP" == "" ]; then
         IP=$(wmk_http_conf ip 127.0.0.1)
@@ -149,6 +181,9 @@ then
             ;;
         c|cl|clean|clear|clean-cache|clear-cache)
             clean_cache
+            ;;
+        init)
+            init "$BASEDIR"
             ;;
         *)
             usage

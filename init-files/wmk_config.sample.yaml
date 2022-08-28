@@ -1,0 +1,8 @@
+# For documentation on the options for wmk_config.yaml,
+# please see https://github.com/bk/wmk/.
+site:
+    title: Built by wmk
+    lang: en
+    # brand_icon: /path/to/some/image.png
+    brand_name: Brand
+    footer_tagline: Built by wmk

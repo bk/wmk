@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="${ page.lang or site.lang or 'en-us' }">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@1.5.3/css/pico.min.css">
+    <title>${ self.page_title() }</title>
+    <style type="text/css">
+      <%block name="inline_css">
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header, main, footer {
+            background: var(--background-color);
+            color: var(--color);
+        }
+        body > main, body > footer {
+            border-bottom: none;
+        }
+        body > header {
+            padding: 0;
+            border-bottom: 1px solid var(--muted-border-color);
+        }
+        body > footer {
+            margin-top: auto;
+            margin-bottom: 0;
+            padding: var(--spacing) 0;
+            border-top: 1px solid var(--muted-border-color);
+        }
+        footer > .container > p {
+            text-align: center;
+            color: var(--muted-color);
+        }
+      </%block>
+    </style>
+  </head>
+  <body>
+    <%block name="header">
+      <header data-theme="dark">
+        <nav class="container-fluid">
+          <ul class="left">
+            <li>
+              % if site.brand_icon and site.brand_name:
+                <a href="/" class="contrast">
+                  <img src="${ site.brand_icon }" style="max-height:2em" alt="${ site.brand_name } - icon">
+                  <strong>${ site.brand_name }</strong>
+                </a>
+              % else:
+                <a href="/" class="contrast"><strong>${ site.brand_name or 'Brand' }</strong></a>
+              % endif
+            </li>
+          </ul>
+          <ul class="right">
+            <li><a href="/tags/" class="contrast">Tags</a></li>
+            <li><a href="/about/" class="contrast">About</a></li>
+          </ul>
+        </nav>
+      </header>
+    </%block>
+    <main class="container" data-theme="light">
+      <%block name="content"></%block>
+    </main>
+    <footer data-theme="dark">
+      <%block name="footer">
+        <div class="container">
+          <p><strong>${ site.footer_tagline or 'Built by wmk' }</strong></p>
+        </div>
+      </%block>
+    </footer>
+  </body>
+</html>
+<%def name="page_title()">${ page.title or site.title or 'Built by wmk'  }</%def>

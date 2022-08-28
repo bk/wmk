@@ -1,0 +1,6 @@
+<%inherit file="../base.mhtml" />
+<%def name="page_title()">About this website</%def>
+<%block name="content">
+  <h1>About</h1>
+  <p>This is merely a placeholder page. Override it by creating either <code>about.md</code> or <code>about/index.md</code> in the <code>content/</code> folder.</p>
+</%block>

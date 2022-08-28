@@ -1,0 +1,25 @@
+<%inherit file="base.mhtml" />
+<%block name="content">
+  <h1>${ site.title or 'Built by wmk' }</h1>
+  % if MDCONTENT:
+    % if len(MDCONTENT) > 30:
+      <p>The 30 most recent pages:</p>
+    % else:
+      <p>Available content, ordered by date:</p>
+    % endif
+    <ul class="pagelist">
+      % for p in MDCONTENT.sorted_by_date()[:30]:
+        <li><a href="${ p['url'] }">${ p['data']['page'].title or '?' }</a></li>
+      % endfor
+    </ul>
+    <p>See also the <a href="/tags/">list of tags</a>.</p>
+  % else:
+    <div class="admonition warning">
+      <p class="admonition-title">Warning</p>
+      <p>No content to display. Please add Markdown content in
+        the <code>content/</code> folder.</p>
+    </div>
+  % endif
+</%block>
+
+<%def name="page_title()">${ site.title }</%def>

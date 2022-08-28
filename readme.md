@@ -80,6 +80,11 @@ file organization.
   the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
   and `debug`.
 
+- `wmk init $basedir`: In a folder which contains `content/` (with Markdown
+  files) but no `wmk_config.yaml`, creates some initial templates as well
+  as a sample `wmk_config.yaml`, thus making it quicker for you to start a new
+  project.
+
 - `wmk build $basedir [-q|--quick]`: Compiles/copies files into `$basedir/htdocs`.
   If `-q` or `--quick` is specified as the third argument, only files considered to
   have changed, based on timestamp checking, are processed. Synonyms for `run` are

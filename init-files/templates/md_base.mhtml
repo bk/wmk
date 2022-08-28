@@ -1,0 +1,25 @@
+<%inherit file="base.mhtml" />
+
+<%def name="page_title()">${ page.title }</%def>
+
+<%block name="content">
+  <hgroup>
+    <h1>${ page.title }</h1>
+    <p class="date muted">${ page.pubdate or MTIME | date_short }</p>
+  </hgroup>
+
+  ${ CONTENT }
+
+  % if page.tags:
+    <article class="tags">
+      <header>
+        <h3>Tags</h3>
+      </header>
+      <p>
+        % for tag in page.tags:
+          <a href="/tags/${ tag | slugify  }/" role="button" class="outline">${ tag  }</a>
+        % endfor
+      </p>
+    </article>
+  % endif
+</%block>

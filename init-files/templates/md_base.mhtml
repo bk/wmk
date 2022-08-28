@@ -5,7 +5,7 @@
 <%block name="content">
   <hgroup>
     <h1>${ page.title }</h1>
-    <p class="date muted">${ page.pubdate or MTIME | date_short }</p>
+    <p class="date muted">${ page.pubdate or page.modified_date or MTIME | date_short }</p>
   </hgroup>
 
   ${ CONTENT }

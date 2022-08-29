@@ -3,80 +3,87 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@1.5.3/css/pico.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/picnic@7.1.0/picnic.min.css">
     <title>${ self.page_title() }</title>
     <style type="text/css">
       <%block name="inline_css">
+        html, body {
+          font-family: -apple-system, BlinkMacSystemFont, "Avenir Next", Avenir, "Nimbus Sans L", Roboto, Noto, "Segoe UI", Arial, Helvetica, "Helvetica Neue", sans-serif;
+        }
+        body code, body pre {
+          font-family: Consolas, Menlo, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+        }
         body {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
         }
-        header, main, footer {
-            background: var(--background-color);
-            color: var(--color);
+        header, header > nav, footer {
+         background: #333;
+         color: #eee;
         }
-        body > main, body > footer {
-            border-bottom: none;
+        header > nav {
+          padding-left: 2%;
+          padding-right: 2%;
         }
-        body > header {
-            padding: 0;
-            border-bottom: 1px solid var(--muted-border-color);
+        nav .burger {
+          font-size: 1.4em;
         }
-        body > footer {
-            margin-top: auto;
-            margin-bottom: 0;
-            padding: var(--spacing) 0;
-            border-top: 1px solid var(--muted-border-color);
+        nav .burger~.menu {
+          background: #333;
         }
-        footer > .container > p {
-            text-align: center;
-            color: var(--muted-color);
+        header a, footer a {
+          color: white;
         }
-        article.tags {
-            padding: var(--spacing) var(--block-spacing-horizontal);
+        footer {
+          text-align: center;
+          font-size: 87.5%;
+          padding: 1em 0;
+          margin-top: auto;
         }
-        article.tags > header {
-            padding: var(--spacing) var(--block-spacing-horizontal);
-            margin-bottom: var(--spacing);
+        main {
+          width: 90%;
+          max-width: 960px;
+          margin: 100px auto 2em auto;
         }
-        article.tags > header > h3 {
-            margin-bottom: 0;
+        .muted {
+          color: #aaa;
+        }
+        hgroup > * {
+          margin: 0;
+          padding: 0;
+        }
+        hgroup {
+          margin-bottom: 2em;
         }
       </%block>
     </style>
   </head>
   <body>
     <%block name="header">
-      <header data-theme="dark">
-        <nav class="container-fluid">
-          <ul class="left">
-            <li>
-              % if site.brand_icon and site.brand_name:
-                <a href="/" class="contrast">
-                  <img src="${ site.brand_icon }" style="max-height:2em" alt="${ site.brand_name } - icon">
-                  <strong>${ site.brand_name }</strong>
-                </a>
-              % else:
-                <a href="/" class="contrast"><strong>${ site.brand_name or 'Brand' }</strong></a>
-              % endif
-            </li>
-          </ul>
-          <ul class="right">
-            <li><a href="/tags/" class="contrast">Tags</a></li>
-            <li><a href="/about/" class="contrast">About</a></li>
-          </ul>
+      <header>
+        <nav>
+          <a href="/" class="brand">
+            % if site.brand_icon and site.brand_name:
+              <img src="${ site.brand_icon }" style="max-height:2em" alt="${ site.brand_name } - icon">
+            % endif
+            <span>${ site.brand_name }</span>
+          </a>
+          <input id="navmenu-b" type="checkbox" class="show">
+          <label for="navmenu-b" class="burger pseudo button">&#x2261;</label>
+          <div class="menu">
+            <a href="/tags/" class="contrast">Tags</a></li>
+            <a href="/about/" class="contrast">About</a></li>
+          </div>
         </nav>
       </header>
     </%block>
-    <main class="container" data-theme="light">
+    <main>
       <%block name="content"></%block>
     </main>
-    <footer data-theme="dark">
+    <footer>
       <%block name="footer">
-        <div class="container">
-          <p><strong>${ site.footer_tagline or 'Built by wmk' }</strong></p>
-        </div>
+        <p><strong>${ site.footer_tagline or 'Built by wmk' }</strong></p>
       </%block>
     </footer>
   </body>

@@ -311,9 +311,9 @@ class MDContentList(list):
           calling page).
 
         The `ordering` parameter, if specified, should be either
-        `title`, `slug`, `url` or `date`, with an optional `-` in front to indicate
-        reverse ordering. The `limit`, if specified, indicates the maximum number of
-        pages to return.
+        `title`, `slug`, `url`, `weight` or `date`, with an optional `-` in
+        front to indicate reverse ordering. The `limit`, if specified, indicates
+        the maximum number of pages to return.
         """
         found = MDContentList([])
         known_conds = (
@@ -389,6 +389,9 @@ class MDContentList(list):
                 found = found.sorted_by(ordering, reverse, 'ZZZ')
             elif ordering == 'url':
                 k = lambda x: x.get('url', 'zzz')
+                found = MDContentList(sorted(found, key=k, reverse=reverse))
+            elif ordering == 'weight':
+                k = lambda x: int(x['data']['page'].get('weight', 999999))
                 found = MDContentList(sorted(found, key=k, reverse=reverse))
             elif ordering.startswith('date'):
                 if ':' in ordering:

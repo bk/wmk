@@ -1,3 +1,5 @@
+<!-- index "wmk" 10 -->
+
 # wmk
 
 This is a static site generator written in Python with the following main
@@ -13,6 +15,8 @@ features:
 - Can be configured to generate a search index for use by `lunr.js`.
 
 [mako]: https://www.makotemplates.org/
+
+<!-- installation "Installation" 20 -->
 
 ## Installation
 
@@ -69,12 +73,14 @@ files.
 Obviously, such commands can be unwieldy, so if you run them regularly you may
 want to create aliases or wrappers for them.
 
+<!-- usage "Usage: The wmk command" 30 -->
+
 ## Usage
 
 The `wmk` command structure is `wmk <action> <base_directory>`. The base
 directory is of course the directory containing the source files in
-subdirectories such as `templates`, `content`, etc.  See below for details on
-file organization.
+subdirectories such as `templates`, `content`, etc.  Also
+see the "File organization" section below.
 
 - `wmk info $basedir`: Shows the real path to the location of `wmk.py` and of
   the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
@@ -98,7 +104,8 @@ file organization.
 - `wmk serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Serves the
   files in `$basedir/htdocs` on `http://127.0.0.1:7007/` by default. The IP and
   port can be modified with the `-p` and `-i` switches or be be configured via
-  `wmk_config.yaml` – see below). Synonyms for `serve` are `srv` and `s`.
+  `wmk_config.yaml` – see the "Configuration file" section). Synonyms for
+  `serve` are `srv` and `s`.
 
 - `wmk watch-serve $basedir [-p|--port <portnum>] [-i|--ip <ip-addr>]`: Combines
   `watch` and `serve` in one command. Synonym: `ws`.
@@ -108,6 +115,8 @@ file organization.
   shortcodes or shortcode dependencies. Note that the cache can be disabled in
   `wmk_config.yaml` by setting `use_cache` to `false`, or on file-by-file basis
   via a frontmatter setting (`no_cache`). A synonym for `clear-cache` is `c`.
+
+<!-- organization "File organization" 40 -->
 
 ## File organization
 
@@ -123,7 +132,7 @@ content and output. They will be created if they do not exist:
   alphanumeric characters), unless their filename starts with a dot or
   underscore or contains the string `base`, or if they are directly inside a
   subdirectory named `base`. For details on context variables received by such
-  stand-alone templates, see below.
+  stand-alone templates, see the "Context variables" section below.
 
 - `content`: Markdown content with YAML metadata. This will be rendered into
   html using the `template` specified in the metadata or `md_base.mhtml` by
@@ -134,17 +143,25 @@ content and output. They will be created if they do not exist:
   Mako template as a string in the context variable `CONTENT`, along with other
   metadata. A YAML datasource can be specified in the metadata block as `LOAD`;
   the data in this file will be added to the context. For further details on the
-  context variables, see below. Files that have other extensions than `.md` or
-  `.yaml` will be copied directly over to the (appropriate subdirectory of the)
-  `htdocs` directory. This is so as to enable "bundling", i.e. keeping images
-  together with related markdown files.
+  context variables, see the "Context variables" section. Files that have other
+  extensions than `.md` or `.yaml` will be copied directly over to the
+  (appropriate subdirectory of the) `htdocs` directory. This is so as to enable
+  "bundling", i.e. keeping images together with related markdown files.
 
 - `data`: YAML files for additional metadata.
 
 - `py`: Directory for Python files. This directory is automatically added to the
   front of `sys.path` before Mako is initialized, meaning that Mako templates
   can import modules placed here. Implicit imports are possible by setting
-  `mako_imports` in the config file (see below).
+  `mako_imports` in the config file (see the "Configuration file" section).
+  There are also two special files that may be placed here: `wmk_autolaod.py` in
+  your project, and `wmk_theme_autoload.py` in the theme's `py/` directory.  If
+  one or both of these is present, wmk imports a dict named `autoload` from
+  them. This means that you can assign `PREPROCESS` and `POSTPROCESS` page
+  actions by name (i.e. keys in the `autoload` dict) rather than as function
+  references, which in turn makes it possible to specify them in the frontmatter
+  directly rather than having to do it via a shortcode. (For more on `PRE-` and
+  `POSTPROCESS`, see the "Site and page variables" section).
 
 - `assets`: Assets for an asset pipeline. Currently this only handles SCSS/Sass
   files in the subdirectory `scss`. They will be compiled to CSS which is placed
@@ -153,23 +170,37 @@ content and output. They will be created if they do not exist:
 - `static`: Static files. Everything in here will be rsynced directoy over to
   `htdocs`.
 
-## Notes
+<!-- gotchas "A few gotchas" 50 -->
+
+## A few gotchas
+
+The following are some of the things you might find surprising when creating a
+website with wmk:
 
 * The order of operations is as follows: (1) Copy files from `static/`; (2) run
   asset pipeline; (3) render Mako templates from `templates`; (4) render
-  Markdown content from `content`.
-
-  Note that later steps may overwrite files placed by earlier steps.
+  Markdown content from `content`. As a consequence, later steps **may
+  overwrite** files placed by earlier steps. This is intentional but definitely
+  something to keep in mind.
 
 * For the `run` and `watch` actions when `-q` or `--quick` is specified as a
   modifier, `wmk.py` uses timestamps to prevent unnecessary re-rendering of
-  templates, markdown files and scss sources. The check is rather primitive so
-  it may be necessary to touch the main source file or remove files from
-  `htdocs` in order to trigger a refresh – or simply to omit `--quick`.
+  templates, markdown files and SCSS sources. The check is rather primitive and
+  does not take account of such things as shortcodes or changed dependencies
+  in the template chain. As a rule, `--quick` is therefore **not recommended**
+  unless you are working on a small, self-contained set of Markdown files.
+
+* If templates or shortcodes have been changed it may sometimes be necessary to
+  clear out the page rendering cache with `wmc c`. During development you may
+  want to add `use_cache: no` to the `wmk_config.yaml` file. Also, some pages
+  should never be cached, in which case it is a good idea to add `no_cache: true`
+  to their frontmatter.
 
 * If files are removed from source directories the corresponding files in
-  `htdocs` will not disappear automatically. You have to clear them out
+  `htdocs/` **will not disappear** automatically. You have to clear them out
   manually – or simply remove the entire directory and regenerate.
+
+<!-- vars "Context variables" 60 -->
 
 ## Context variables
 
@@ -196,7 +227,7 @@ Markdown content, receive the following context variables:
   An `MDContentList` is a list object with some convenience methods for
   filtering and sorting. It is described at the end of this Readme file.
 - Whatever is defined under `template_context` in the `wmk_config.yaml` file
-  (see below).
+  (see the "Configuration file" section below).
 - `SELF_URL`: The relative path to the HTML file which the output of the
   template will be written to.
 - `SELF_TEMPLATE`: The path to the current template file (from the template
@@ -228,9 +259,11 @@ following context variables:
   metadata.
 
 For further details on context variables set in the markdown frontmatter and in
-`index.yaml` files, see below under "Site and page variables".
+`index.yaml` files, see the "Site and page variables" section below.
 
-## Config file
+<!-- config "Configuration file" 70 -->
+
+## Configuration file
 
 A config file, `$basedir/wmk_config.yaml`, can be used to configure some aspects
 of how `wmk` operates. The name of the file may be changed by setting the
@@ -244,8 +277,8 @@ support for the following settings:
   This should be a dict.
 
 - `site`: Values for common information relating to the website. These are also
-  added to the template context under the key `site`. See further below, under
-  "Site and page variables".
+  added to the template context under the key `site`. Also
+  see the "Site and page variables" section below.
 
 - `render_drafts`: Normally, markdown files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -313,7 +346,8 @@ support for the following settings:
 
 - `lunr_languages`: A two-letter language code or a list of such codes,
   indicating which language(s) to use for stemming when building a Lunr index.
-  The default language is `en`. See further at the end of this README.
+  The default language is `en`. For more on this,
+  see the "Site search using Lunr" section below.
 
 - `http`: This is is a dict for configuring the address used for `wmk serve`.
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
@@ -343,6 +377,8 @@ support for the following settings:
 [other]: https://github.com/Python-Markdown/markdown/wiki/Third-Party-Extensions
 
 
+<!-- pandoc "A note on Pandoc" 80 -->
+
 ## A note on Pandoc
 
 Pandoc's variant of Markdown is very featureful and sophisticated, but since its
@@ -371,6 +407,8 @@ respected as well, although only in its integer form and not as a range (such as
 `"2-4"`).
 
 
+<!-- themes "Available themes" 90 -->
+
 ## Available themes
 
 Currently there are three wmk themes available:
@@ -395,6 +433,8 @@ Currently there are three wmk themes available:
 [company]: https://picocss.com/examples/company/
 [pico]: https://picocss.com/
 [pdemo]: https://picompany.baldr.net/
+
+<!-- shortcodes "Shortcodes" 100 -->
 
 ## Shortcodes
 
@@ -441,7 +481,7 @@ Here is an example of a shortcode in Markdown:
 ```markdown
 ### Yearly expenses
 
-{{< csv_table('expenses_2021.csv') >}}
+{{< csv_table('expenses_2021.csv') >}}
 ```
 
 Here is an example `csv_table.mc` Mako component that might handle the above
@@ -484,7 +524,7 @@ keys = info[0].keys()
 Shortcodes can take up more than one line if desired, for instance:
 
 ```markdown
-{{< figure(
+{{< figure(
       src="/img/2021/11/crocodile-or-alligator.jpg",
       caption="""
 Although they appear similar, **crocodiles** and **alligators** differ in easy-to-spot ways:
@@ -497,6 +537,11 @@ Although they appear similar, **crocodiles** and **alligators** differ in easy-t
 
 In this example, the caption contains Markdown which would be converted to HTML
 by the shortcode component.
+
+Note that shortcodes are not escaped inside code blocks, so if you need to show
+examples of shortcode usage in your content they must be escaped in some way in
+such contexts.  One relatively painless way is to put a non-breaking space
+character after the opening tag `{{<` instead of a space.
 
 ### Default shortcodes
 
@@ -575,6 +620,8 @@ The following default shortcodes are provided by the `wmk` installation:
 - `var`: The value of a variable, e.g. `"page.title"` or `"site.description"`.
   One required argument: `varname`. Optional argument: `default` (which defaults
   to the empty string), indicating what to show if the variable is not available.
+
+<!-- pagevars "Site and page variables" 110 -->
 
 ## Site and page variables
 
@@ -843,6 +890,8 @@ See also the description of the `DATE` and `MTIME` context variables above.
   normally ascending, i.e. with the lower numbers at the top. (Pages may of
   course be ordered by other criteria, e.g. by `pubdate`).
 
+<!-- template_filters "Template filters" 120 -->
+
 ## Template filters
 
 In addition to the [built-in template
@@ -901,7 +950,9 @@ import them in templates, the best way of doing this his to add them via the
 Please note that in order to avoid conflicts with the above filters you should
 not place a file named `wmk_mako_filters.py` in your `py/` directories.
 
-## MDContentList
+<!-- mdcontentlist "Working with lists of pages" 130 -->
+
+## Working with lists of pages
 
 Templates which render a list of content files (e.g. a list of blog posts or
 pages belonging to a category) will need to filter or sort `MDCONTENT`
@@ -1082,10 +1133,12 @@ Typical usage of `write_to()`:
 % endif
 ```
 
-## Site search using `lunr.js`
+<!-- lunr "Site search using Lunr" 140 -->
+
+## Site search using Lunr
 
 With `lunr_index` (and optionally `lunr_index_fields`) in `wmk_config.yaml`, wmk
-will build a search index for [Lunr](https://lunrjs.com/) and place it in
+will build a search index for [Lunr.js](https://lunrjs.com/) and place it in
 `idx.json` in the webroot. In order to minimize its size, no metadata about
 each record is saved to the index. Instead, a simple list of pages (with title
 and summary) is placed in `idx.summaries.json`. The summary is taken either from

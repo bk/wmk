@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.5'
+VERSION = '0.9.6'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -309,14 +309,14 @@ def render_markdown(ct, conf):
     if '{{<' in doc:
         # Mako shortcodes
         # We need to handle include() first.
-        incpat = r'{{<\s*(include)\(\s*(.*?)\s*\)\s*>}}'
+        incpat = r'{{<[ \n\r\t]*(include)\(\s*(.*?)\s*\)\s*>}}'
         incfound = re.search(incpat, doc, re.DOTALL)
         while incfound:
             doc = re.sub(incpat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             incfound = re.search(incpat, doc, re.DOTALL)
         # Now other shortcodes.
         # funcname, argstring
-        pat = r'{{<\s*(\w+)\(\s*(.*?)\s*\)\s*>}}'
+        pat = r'{{<[ \n\r\t]*(\w+)\(\s*(.*?)\s*\)\s*>}}'
         found = re.search(pat, doc, re.DOTALL)
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)

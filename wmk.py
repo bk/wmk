@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.6'
+VERSION = '0.9.7'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -360,7 +360,7 @@ def render_markdown(ct, conf):
         if pandoc_options:
             popt['extra_args'] = pandoc_options
         ret = pypandoc.convert_text(
-            doc, pandoc_output, format=pandoc_input, **popt)
+            doc_with_yaml(pg, doc), pandoc_output, format=pandoc_input, **popt)
         if need_toc:
             offset = ret.find('</nav>') + 6
             toc = ret[:offset]
@@ -373,6 +373,26 @@ def render_markdown(ct, conf):
         pg._CACHER = lambda x: cache.write_cache(x)
     elif cache:
         cache.write_cache(ret)
+    return ret
+
+
+def doc_with_yaml(pg, doc):
+    """
+    Put YAML frontmatter back (with possible additions via inheritance), for
+    potential use by Pandoc.
+    """
+    safe_pg = {}
+    for k in pg:
+        if k == 'DATE' and not 'date' in pg:
+            safe_pg['date'] = str(pg[k])
+        elif k.startswith('_') or k.upper() == k:
+            # Skip private and system page variables
+            continue
+        if pg[k] is None or isinstance(pg[k], (str, int, float, list, tuple, dict)):
+            safe_pg[k] = pg[k]
+        else:
+            safe_pg[k] = str(pg[k])
+    ret = '---\n' + yaml.dump(safe_pg) + '---\n\n' + doc
     return ret
 
 

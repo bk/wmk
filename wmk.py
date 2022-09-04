@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.7'
+VERSION = '0.9.8'
 
 
 # Template variables with these names will be converted to date or datetime

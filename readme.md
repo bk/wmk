@@ -68,8 +68,9 @@ somewhere in your `$PATH` to `$myrepo/bin/wmk`.
 Required software (aside from Python, of course):
 
 - `rsync` (for static file copying).
-- For `wmk watch` functionality, you need to be using Linux and have
-  `inotifywait` installed.
+- For `wmk watch` functionality (as well as `watch-serve`), you need either
+  `inotifywait` or `fswatch` to be installed and in your `$PATH`. If both are
+  available, the former is preferred.
 
 wmk requires a Unix-like environment. In particular, bash must be installed
 in `/bin/bash`, and the directory separator is assumed to be `/`.

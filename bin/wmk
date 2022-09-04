@@ -6,6 +6,8 @@
 SCRIPT_PATH=$(realpath "$0")
 SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
+INOTIFYWAIT="$(which inotifywait)"
+FSWATCH="$(which fswatch)"
 ACTION="$1"
 BASEDIR="$2"
 QUICK=""
@@ -156,11 +158,26 @@ then
             ;;
         w|watch)
             cd "$BASEDIR" || exit 1
-            while true; do
-                inotifywait -e modify -e attrib -e close_write -e create -e delete -e delete_self -r \
-                    ./assets ./content ./templates ./data ./py ./static ./templates ./themes ./$WMK_CONFIG
-                "$WMK_HOME/wmk.py" "$BASEDIR"
-            done
+            if [ "$INOTIFYWAIT" != "" ]; then
+                while true; do
+                    "$INOTIFYWAIT" \
+                        -e modify -e attrib -e close_write -e create -e delete -e delete_self -r \
+                        ./assets ./content ./templates ./data ./py ./static ./themes ./$WMK_CONFIG
+                    "$WMK_HOME/wmk.py" "$BASEDIR"
+                done
+            elif [ "$FSWATCH" != "" ]; then
+                while true; do
+                    "$FSWATCH" -1 -r \
+                        --event Created --event Updated --event Removed \
+                        --event AttributeModified \
+                        --event MovedFrom --event MovedTo \
+                        ./assets ./content ./templates ./data ./py ./static ./themes ./$WMK_CONFIG
+                    "$WMK_HOME/wmk.py" "$BASEDIR"
+                done
+            else
+                echo "ERROR: Cannot watch without either inotifywait or fswatch" 1>&2
+                exit 1
+            fi
             ;;
         ws|watch-serve)
             watch_and_serve
@@ -174,9 +191,16 @@ then
                 echo "  - WARNING: $(realpath "$BASEDIR") has no wmk_config.yaml!"
             fi
             if [[ -e "$CACHE_FILE" ]]; then
-                echo "  - cache file: $CACHE_FILE"
+                echo "  - cache file: $(realpath "$CACHE_FILE")"
             else
                 echo "  - no cache file present"
+            fi
+            if [ "$INOTIFYWAIT" != "" ]; then
+                echo "  - inotifywait used for watch functionality"
+            elif [ "$FSWATCH" != "" ]; then
+                echo "  - fswatch used for watch functionality"
+            else
+                echo "  - no watch functionality available (need inotify or fswatch)"
             fi
             ;;
         c|cl|clean|clear|clean-cache|clear-cache)

@@ -77,9 +77,10 @@ in `/bin/bash`, and the directory separator is assumed to be `/`.
 
 ### Method 2: Docker
 
-If you are not on Linux it may be a better option for you to run wmk via Docker.
-In that case, after cloning the repo (or simply copying the `Dockerfile` from
-it) you can give the command
+If you are not on Linux (or on MacOS with all requirements already set up) it
+may be a better option for you to run wmk via Docker.  In that case, after
+cloning the repo (or simply copying the `Dockerfile` from it) you can give the
+command
 
 ```shell
 docker build -t wmk .

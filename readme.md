@@ -50,7 +50,7 @@ static website (up to a few hundred pages).
 
 ## Installation
 
-### Method 1: local
+### Method 1: git + pip
 
 Clone this repo into your chosen location (`$myrepo`) and install the necessary
 Python modules into a virtual environment:
@@ -75,12 +75,28 @@ Required software (aside from Python, of course):
 wmk requires a Unix-like environment. In particular, bash must be installed
 in `/bin/bash`, and the directory separator is assumed to be `/`.
 
-### Method 2: Docker
+### Method 2: Homebrew
 
-If you are not on Linux (or on MacOS with all requirements already set up) it
-may be a better option for you to run wmk via Docker.  In that case, after
-cloning the repo (or simply copying the `Dockerfile` from it) you can give the
-command
+If you are on MacOS and already have Homebrew, this is the easiest installation
+method.
+
+First add the tap to your repositories:
+
+```shell
+brew tap bk/wmk
+```
+
+Then install wmk from it:
+
+```
+brew install --build-from-source wmk
+```
+
+### Method 3: Docker
+
+If you are neither on a modern Linux system nor on MacOS with Homebrew, it may
+be a better option for you to run wmk via Docker. In that case, after cloning
+the repo (or simply copying the `Dockerfile` from it) you can give the command
 
 ```shell
 docker build -t wmk .

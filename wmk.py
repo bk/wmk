@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.8'
+VERSION = '0.9.9-pre1'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -286,6 +286,7 @@ def render_markdown(ct, conf):
     pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
     pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
     # TODO: offer support for multiple output formats when using pandoc?
+    # TODO: offer support for other input formats (rst, org) when using pandoc?
     # This should be a markdown subformat or gfm
     pandoc_input = pg.get('pandoc_input_format',
                           conf.get('pandoc_input_format')) or 'markdown'

@@ -5,6 +5,7 @@ import sys
 import datetime
 import re
 import ast
+import json
 
 import sass
 import yaml
@@ -12,7 +13,6 @@ import frontmatter
 import markdown
 import pypandoc
 import lunr
-import json
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.9-pre2'
+VERSION = '0.9.9'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -567,6 +567,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     content = []
     default_template = conf.get('default_template', 'md_base.mhtml')
     default_pretty_path = lambda x: False if x == 'index.md' else True
+    known_ids = set()
     for root, dirs, files in os.walk(ctdir):
         for fn in files:
             if not fn.endswith('.md'):
@@ -645,6 +646,23 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 page['title'] = re.sub(
                     r'\.(?:md|markdown|mdwn|html?)$', '', page['title'], flags=re.I)
                 page['title'] = re.sub(r'[_ -]', ' ', page['title']).strip() or page['slug']
+            # Ensure that id is present...
+            if not 'id' in page:
+                page['id'] = slugify(source_file_short[:-3])
+            # ...and that it is unique
+            if page['id'] in known_ids:
+                id_add = 0
+                id_tpl = '%s-%d'
+                while True:
+                    id_try = id_tpl % (page['id'], id_add)
+                    if id_try in known_ids:
+                        id_add += 1
+                        continue
+                    page['id'] = id_try
+                    print("WARNING: changing id of %s to %s to prevent collision"
+                          % (source_file_short, id_try))
+                    break
+            known_ids.add(page['id'])
             fn = '/'.join(fn_parts)
             html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
             html_dir = root.replace(ctdir, outputdir, 1)

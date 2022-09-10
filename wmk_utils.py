@@ -167,6 +167,34 @@ class MDContentList(list):
         ret = self.match_entry(is_post)
         return ret.sorted_by_date() if ordered else ret
 
+    def non_posts(self):
+        """
+        'Pages', i.e. all entries that are NOT posts/blog entreis.
+        """
+        not_post = lambda x: not (
+            x['source_file_short'].strip('/').startswith(('posts/', 'blog/'))
+            or x['data']['page'].get('type', '') in (
+                'post', 'blog', 'blog-entry', 'blog_entry'))
+        return self.match_entry(not_post)
+
+    def has_slug(self, sluglist):
+        """
+        Pages with any of the given slugs.
+        """
+        if isinstance(sluglist, str):
+            sluglist = (sluglist, )
+        slugpred = lambda x: x.slug in sluglist
+        return self.match_page(slugpred)
+
+    def has_id(self, idlist):
+        """
+        Pages with any of the given ids.
+        """
+        if isinstance(idlist, str):
+            idlist = (idlist, )
+        idpred = lambda x: x['id'] in idlist
+        return self.match_page(idpred)
+
     def url_match(self, url_pred):
         return self.match_entry(lambda x: urlpred(x['url']))
 
@@ -290,6 +318,7 @@ class MDContentList(list):
 
         - `title`: A regular expression which will be applied to the page title.
         - `slug`: A regular expression which will be applied to the slug.
+        - `id`: A string or list of strings which must match the id exactly.
         - `url`: A regular expression which will be applied to the target URL.
         - `path`: A regular expression which will be applied to the path to the markdown
            source file (i.e. the `source_file_short` field).
@@ -333,6 +362,10 @@ class MDContentList(list):
                     return False
                 for k in ('title', 'slug'):
                     if k in x and not re.search(x[k], p.get(k, ''), flags=re.I):
+                        return False
+                if 'id' in x:
+                    idlist = (x['id'], ) if isinstance(x['id'], str) else x['id']
+                    if not p['id'] in idlist:
                         return False
                 if 'url' in x and not re.search(x['url'], c['url'], flags=re.I):
                     return False

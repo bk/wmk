@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.9-pre1'
+VERSION = '0.9.9-pre2'
 
 
 # Template variables with these names will be converted to date or datetime
@@ -217,15 +217,30 @@ def process_markdown_content(content, lookup, conf, force):
         page = data['page']
         global autoload
         if page.POSTPROCESS and page._CACHER:
+            # NOTE: Because of the way we handle caching in the presence of
+            # postprocessing, the postprocess chain is potentially run twice
+            # for each applicable page: once before the Mako template is called,
+            # and once after. To prevent this, we use the `was_called`
+            # attribute which when present prevents the postprocessing from
+            # taking place after the template has been applied.
+            # AS A CONSEQUENCE, the range of application for a cached and a
+            # non-cached page will be slightly different in that a cached page
+            # will not apply the postprocessing code to the parts of the HTML
+            # supplied by the Mako template, only to the HTML directly converted
+            # from Markdown. For most purposes this will not matter. If it does
+            # for some specific page you will need to set `no_cache` to True
+            # in its frontmatter.
             for pp in page.POSTPROCESS:
                 if isinstance(pp, str):
                     if autoload and pp in autoload:
                         html = autoload[pp](html, **data)
+                        autoload[pp].was_called = data['SELF_FULL_PATH']
                     else:
                         print("WARNING: postprocess action '%s' missing for %s"
                               % (pp, ct['url']))
                 else:
                     html = pp(html, **data)
+                    pp.was_called = data['SELF_FULL_PATH']
             page._CACHER(html)
             ct['rendered'] = html
             data['CONTENT'] = html
@@ -261,11 +276,23 @@ def postprocess_html(ppr, data, html):
     """
     # data contains page, CONTENT, RAW_CONTENT, etc.
     if callable(ppr):
-        return ppr(html, **data)
-    elif isinstance(ppr, (list, tuple)):
+        ppr = [ppr]
+    fullpath = data['SELF_FULL_PATH']
+    if isinstance(ppr, (list, tuple)):
         for pp in ppr:
-            if callable(pp):
-                html = pp(html, **data)
+            ppc = pp if callable(pp) else (autoload or {}).get(pp, None)
+            if not ppc:
+                print("WARNING: postprocess action '%s' missing for %s"
+                      % (pp, fullpath))
+                continue
+            was_called = getattr(ppc, 'was_called', False)
+            if was_called and was_called == fullpath:
+                continue
+            elif was_called:
+                # The attribute was set by a different (cached) page using the same
+                # callable for postprocessing; let's reset it.
+                ppc.was_called = False
+            html = ppc(html, **data)
     return html
 
 
@@ -285,8 +312,6 @@ def render_markdown(ct, conf):
     is_pandoc = pg.get('pandoc', conf.get('pandoc', False))
     pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
     pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
-    # TODO: offer support for multiple output formats when using pandoc?
-    # TODO: offer support for other input formats (rst, org) when using pandoc?
     # This should be a markdown subformat or gfm
     pandoc_input = pg.get('pandoc_input_format',
                           conf.get('pandoc_input_format')) or 'markdown'
@@ -295,9 +320,12 @@ def render_markdown(ct, conf):
                            conf.get('pandoc_output_format')) or 'html'
     use_cache = conf.get('use_cache', True) and not pg.get('no_cache', False)
     if use_cache:
+        mtime_matters = pg.get('cache_mtime_matters',
+                               conf.get('cache_mtime_matters', False))
+        maybe_mtime = ct['data']['MTIME'] if mtime_matters else None
         optstr = str([target, extensions, extension_configs,
                       is_pandoc, pandoc_filters, pandoc_options,
-                      pandoc_input, pandoc_output])
+                      pandoc_input, pandoc_output, maybe_mtime])
         projectdir = ct['data']['DATADIR'][:-5] # remove /data from the end
         cache = RenderCache(doc, optstr, projectdir)
         ret = cache.get_cache()
@@ -360,12 +388,24 @@ def render_markdown(ct, conf):
             popt['filters'] = pandoc_filters
         if pandoc_options:
             popt['extra_args'] = pandoc_options
+        pd_doc = doc_with_yaml(pg, doc)
         ret = pypandoc.convert_text(
-            doc_with_yaml(pg, doc), pandoc_output, format=pandoc_input, **popt)
+            pd_doc, pandoc_output, format=pandoc_input, **popt)
         if need_toc:
             offset = ret.find('</nav>') + 6
             toc = ret[:offset]
             ret = re.sub(r'<p>\[TOC\]</p>', toc, ret[offset:], flags=re.M)
+        # map from format to target filename, e.g. {'pdf': 'subdir/myfile.pdf'}
+        pdformats = pg.get('pandoc_extra_formats', {})
+        # map from format to pandoc args: what to do for each format;
+        # passed directly on to pypandoc. Keys: extra_args, filters
+        pdformats_conf = pg.get('pandoc_extra_formats_settings', {})
+        if pdformats:
+            # NOTE: pd_doc will not include the output of shortcodes that affect
+            #       POSTPROCESS, notably linkto and pagelist.
+            pandoc_extra_formats(
+                pd_doc, pandoc_input,
+                pdformats, pdformats_conf, ct['data']['WEBROOT'])
     else:
         ret = markdown.markdown(
             doc, extensions=extensions, extension_configs=extension_configs)
@@ -375,6 +415,30 @@ def render_markdown(ct, conf):
     elif cache:
         cache.write_cache(ret)
     return ret
+
+
+def pandoc_extra_formats(doc, pandoc_input, pdformats, pdformats_conf, webroot):
+    """
+    Writes extra pandoc output formats (pdf, docx, ...) to the files specified
+    in `pdformats` with the optional configuration (extra_args, filters) specified
+    in `pdformats_conf`.
+    """
+    for fmt in pdformats:
+        cnf = pdformats_conf.get(fmt, {})
+        if isinstance(cnf, list):
+            cnf = {'extra_args': cnf}
+        extra_args = cnf.get('extra_args', ())
+        filters = cnf.get('filters', ())
+        out_fn = pdformats[fmt].strip('/')
+        outputfile = os.path.join(webroot, out_fn)
+        maybe_mkdir(outputfile)
+        pypandoc.convert_text(
+            doc, to=fmt, format=pandoc_input,
+            extra_args=extra_args, filters=filters,
+            outputfile=outputfile)
+        print('[%s] - extra: %s' % (
+                str(datetime.datetime.now()), out_fn))
+
 
 
 def doc_with_yaml(pg, doc):
@@ -389,11 +453,19 @@ def doc_with_yaml(pg, doc):
         elif k.startswith('_') or k.upper() == k:
             # Skip private and system page variables
             continue
-        if pg[k] is None or isinstance(pg[k], (str, int, float, list, tuple, dict)):
-            safe_pg[k] = pg[k]
-        else:
+        elif isinstance(pg[k], (datetime.date, datetime.datetime)):
             safe_pg[k] = str(pg[k])
-    ret = '---\n' + yaml.dump(safe_pg) + '---\n\n' + doc
+        elif isinstance(pg[k], attrdict):
+            safe_pg[k] = dict(**pg[k])
+        else:
+            safe_pg[k] = pg[k]
+    # This is primarily for pandoc, so let's accommodate it
+    if not 'date' in safe_pg:
+        for k in ('pubdate', 'modified_date', 'created_date', 'MTIME'):
+            if k in safe_pg:
+                safe_pg['date'] = safe_pg[k]
+                break
+    ret = '---\n' + yaml.safe_dump(safe_pg) + '---\n\n' + doc
     return ret
 
 

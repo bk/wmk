@@ -116,7 +116,10 @@ def main(basedir=None, quick=False):
         directories=lookup_dirs,
         imports=mako_imports)
     conf['_lookup'] = lookup
-    # 3) get info about stand-alone templates and Markdown content
+    # 3) write redirect files
+    handle_redirects(
+        conf.get('redirects'), template_vars['DATADIR'], template_vars['WEBROOT'])
+    # 4) get info about stand-alone templates and Markdown content
     template_vars['site'].build_time = datetime.datetime.now()
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
@@ -125,9 +128,9 @@ def main(basedir=None, quick=False):
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
         template_vars, conf, force)
-    # 4) render templates
+    # 5) render templates
     process_templates(templates, lookup, template_vars, force)
-    # 5) render Markdown content
+    # 6) render Markdown content
     process_markdown_content(content, lookup, conf, force)
 
 
@@ -765,6 +768,44 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
                     })
     template_vars['TEMPLATES'] = templates
     return templates
+
+
+def handle_redirects(redir_file, datadir, webroot):
+    if not redir_file:
+        return
+    if not isinstance(redir_file, str):
+        redir_file = 'redirects.yaml'
+    redir_file = os.path.join(datadir, redir_file.strip('/'))
+    if not os.path.exists(redir_file):
+        return
+    redirects = []
+    with open(redir_file) as f:
+        redirects = yaml.safe_load(f) or {}
+    if not (redirects and isinstance(redirects, list)):
+        return
+    for it in redirects:
+        redir_to = it.get('to')
+        redir_from = it.get('from')
+        if not redir_to and redir_from:
+            continue
+        if not isinstance(redir_from, list):
+            redir_from = [redir_from]
+        for from_path in redir_from:
+            write_redir_file(from_path, redir_to, webroot)
+
+
+def write_redir_file(from_path, redir_to, webroot):
+    if from_path.endswith('/'):
+        from_path += 'index.html'
+    filename = os.path.join(webroot, from_path.strip('/'))
+    maybe_mkdir(filename)
+    with open(filename, 'w') as f:
+        f.write("""<html><head>
+        <title>One moment... redirecting</title>
+        <meta http-equiv="refresh" content="0;url={}">
+        </head><body><p>Redirecting to <a href="{}">here</a>.</p>
+        </body></html>""".format(redir_to, redir_to).replace(' '*8, ''))
+    print("REDIR: {} => {}".format(from_path, redir_to))
 
 
 def maybe_mkdir(fn):

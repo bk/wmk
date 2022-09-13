@@ -439,6 +439,13 @@ support for the following settings:
   library of Mako components which can be easily used on multiple sites and
   across different themes.
 
+- `redirects`: If this is True or a string pointing to a YAML file in the
+  `data/` directory (whose default name is `redirects.yaml`), then wmk will
+  write HTML stubs containing `<meta http-equiv="refresh" ...>` in the indicated
+  locations. The contents of the YAML file is a list of entries with the keys
+  `from` and `to`. The former is a path under `htdocs/` or a list of such paths,
+  while `to` is an absolute or relative URL which you are to be redirected to.
+
 [pymarkdown]: https://python-markdown.github.io/
 [pypandoc]: https://github.com/NicklasTegner/pypandoc
 [ext]: https://python-markdown.github.io/extensions/

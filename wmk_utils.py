@@ -358,8 +358,12 @@ class MDContentList(list):
             def pred(c):
                 x = match_expr
                 p = c['data']['page']
-                if 'exclude_url' in x and c['url'] == x['exclude_url']:
-                    return False
+                if 'exclude_url' in x:
+                    # Normalize both URLs somewhat
+                    c_url = c['url'].replace('/index.html', '/')
+                    x_url = x['exclude_url'].replace('/index.html', '/')
+                    if c_url == x_url:
+                        return False
                 for k in ('title', 'slug'):
                     if k in x and not re.search(x[k], p.get(k, ''), flags=re.I):
                         return False

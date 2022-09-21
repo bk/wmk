@@ -694,6 +694,9 @@ The following default shortcodes are provided by the `wmk` installation:
 - `youtube`: A YouTube video. One required argument: `id`. Optional arguments:
   `css_class`, `autoplay`, `title`.
 
+- `wp`: A link to Wikipedia. One required argument: `title`. Optional arguments:
+  `label`, `lang`. Example: `{{< wp('L.L. Zamenhof', lang='eo') >}}`.
+
 - `var`: The value of a variable, e.g. `"page.title"` or `"site.description"`.
   One required argument: `varname`. Optional argument: `default` (which defaults
   to the empty string), indicating what to show if the variable is not available.

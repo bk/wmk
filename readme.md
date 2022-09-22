@@ -1258,6 +1258,14 @@ Toolkit](https://www.nltk.org/).
 For information about the supported syntax of the search expression, see the
 [Lunr documentation](https://lunrjs.com/guides/searching.html).
 
+Note that because Lunr creates a single index file for the whole site, it may
+not be a practical  option for large sites with lots of content – a realistic
+limit may be somewhere around 1,000 pages or so. In such a case, you may want to
+consider using solutions that break the index up into smaller chunks, such as
+[Pagefind](https://pagefind.app/). Alternatively, you should look into a
+server-side or hosted solution such as [Algolia](https://www.algolia.com/) or
+[Meilisearch](https://www.meilisearch.com/).
+
 ### Limitations
 
 - Building the index does not mean that the search functionality is complete. It

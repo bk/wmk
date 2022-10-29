@@ -25,7 +25,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.10'
+VERSION = '0.9.11'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -82,7 +82,7 @@ def main(basedir=None, quick=False):
     os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # support content bundles (mainly images inside content dir)
     os.system(
-        'rsync -a --exclude "*.md" --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
+        'rsync -a --exclude "*.md" --exclude "*.html" --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
         % (dirs['content'], dirs['output']))
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
@@ -129,7 +129,7 @@ def main(basedir=None, quick=False):
         template_vars, conf, force)
     # 5) render templates
     process_templates(templates, lookup, template_vars, force)
-    # 6) render Markdown content
+    # 6) render Markdown/HTML content
     process_markdown_content(content, lookup, conf, force)
 
 
@@ -250,7 +250,7 @@ def process_markdown_content(content, lookup, conf, force):
         try:
             html_output = template.render(**data)
         except:
-            print("WARNING: Error when rendering md {}: {}".format(
+            print("WARNING: Error when rendering {}: {}".format(
                 ct['source_file_short'], text_error_template().render()))
         # If present, POSTPROCESS will have been added by a shortcode call
         if html_output and page.get('POSTPROCESS'):
@@ -311,6 +311,7 @@ def render_markdown(ct, conf):
     target = ct.get('target', '')
     # The following settings affect cache validity:
     extensions, extension_configs = markdown_extensions_settings(pg, conf)
+    is_html = ct.get('source_file', '').endswith('.html')
     is_pandoc = pg.get('pandoc', conf.get('pandoc', False))
     pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
     pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
@@ -366,7 +367,9 @@ def render_markdown(ct, conf):
                           % (pp, ct['source_file_short']))
             else:
                 doc = pp(doc, pg)
-    if is_pandoc:
+    if is_html:
+        ret = doc
+    elif is_pandoc:
         # For TOC to be added, page.toc must be True and the
         # markdown content must have a '[TOC]' line
         need_toc = (
@@ -568,11 +571,11 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     """
     content = []
     default_template = conf.get('default_template', 'md_base.mhtml')
-    default_pretty_path = lambda x: False if x == 'index.md' else True
+    default_pretty_path = lambda x: False if x in ('index.md', 'index.html') else True
     known_ids = set()
     for root, dirs, files in os.walk(ctdir):
         for fn in files:
-            if not fn.endswith('.md'):
+            if not fn.endswith(('.md', '.html')):
                 continue
             if fn.startswith('_') or fn.startswith('.'):
                 continue
@@ -633,7 +636,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 page['pretty_path'] = pretty_path
             # Slug determines destination file
             if 'slug' in page and re.match(r'^[a-z0-9_-]+$', page['slug']):
-                fn = re.sub(r'[^/]+\.md$', (page['slug']+'.md'), fn)
+                fn = re.sub(r'[^/]+\.(md|html)$', (page['slug']+r'.\1'), fn)
             # Ensure that the destination file/dir only contains a limited
             # set of characters
             fn_parts = fn.split('/')
@@ -666,7 +669,10 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                     break
             known_ids.add(page['id'])
             fn = '/'.join(fn_parts)
-            html_fn = fn.replace('.md', '/index.html' if pretty_path else '.html')
+            if pretty_path:
+                html_fn = re.sub(r'\.(?:md|html)$', '/index.html', fn)
+            else:
+                html_fn = re.sub(r'\.md$', '.html', fn)
             html_dir = root.replace(ctdir, outputdir, 1)
             target_fn = os.path.join(html_dir, html_fn)
             data['SELF_URL'] = '' if page.get('do_not_render') \

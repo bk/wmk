@@ -9,7 +9,7 @@ wmk is a flexible and versatile static site generator written in Python.
 The following features are present in several static site generators (SSGs); you
 might almost call them standard:
 
-- Markdown content with YAML metadata in the frontmatter.
+- Markdown or HTML content with YAML metadata in the frontmatter.
 - Support for themes.
 - Sass/SCSS support (via [`libsass`][libsass]).
 - Can generate a search index for use by [`lunr.js`][lunr].
@@ -20,7 +20,8 @@ The following features are among the ones that set wmk apart:
 - The content is rendered using [Mako][mako], a template system which makes all
   the resources of Python easily available to you.
 - "Stand-alone" templates – i.e. templates that are not used for presenting
-  Markdown-based content – are also rendered if present.
+  Markdown-based content – are also rendered if present. This can e.g. be used
+  for list pages or content based on external sources (such as a database).
 - Additional data for the site may be loaded from separate YAML files ­ or even
   (with a small amount of Python/Mako code) from other data sources such as CSV
   files, SQL databases or REST/graphql APIs.
@@ -137,9 +138,9 @@ see the "File organization" section below.
   and `debug`.
 
 - `wmk init $basedir`: In a folder which contains `content/` (with Markdown
-  files) but no `wmk_config.yaml`, creates some initial templates as well
-  as a sample `wmk_config.yaml`, thus making it quicker for you to start a new
-  project.
+  or HTML files) but no `wmk_config.yaml`, creates some initial templates as
+  well as a sample `wmk_config.yaml`, thus making it quicker for you to start a
+  new project.
 
 - `wmk build $basedir [-q|--quick]`: Compiles/copies files into `$basedir/htdocs`.
   If `-q` or `--quick` is specified as the third argument, only files considered to
@@ -184,21 +185,39 @@ content and output. They will be created if they do not exist:
   subdirectory named `base`. For details on context variables received by such
   stand-alone templates, see the "Context variables" section below.
 
-- `content`: Markdown content with YAML metadata. This will be rendered into
-  html using the `template` specified in the metadata or `md_base.mhtml` by
-  default. The target filename will be `index.html` in a directory corresponding
-  to the basename of the markdown file, unless `pretty_path` in the metadata is
-  `false` or the name of the Markdown file itself is `index.md` (in which case
-  only the extension is replaced). The converted content will be passed to the
-  Mako template as a string in the context variable `CONTENT`, along with other
-  metadata. A YAML datasource can be specified in the metadata block as `LOAD`;
-  the data in this file will be added to the context. For further details on the
-  context variables, see the "Context variables" section. Files that have other
-  extensions than `.md` or `.yaml` will be copied directly over to the
-  (appropriate subdirectory of the) `htdocs` directory. This is so as to enable
-  "bundling", i.e. keeping images together with related markdown files.
+- `content`: Markdown (`*.md`) and/or HTML (`*.html*`) content with YAML
+  metadata.
+  - Markdown will be converted into HTML and then "wrapped" in a layout  using
+    the `template` specified in the metadata or `md_base.mhtml` by default.
+  - HTML files inside `content` are assumed to be fragments rather than complete
+    documents. Accordingly, they will be wrapped in a layout just like the
+    converted markdown. In general, such content is treated just like Markdown
+    files except that the markdown-to-html conversion step is skipped.  For
+    instance, shortcodes can be used normally, although they may not work as
+    expected if they return markdown rather than HTML. (Complete HTML documents
+    are best placed in `static` rather than `content`).
+  - The YAML metadata may be at the top of the md/html document itself, inside a
+    frontmatter block delimited by `---`, or it may be in `index.yaml` files
+    which are inherited by subdirectories and the files contained in them.
+    For details, see the "Site and page variables" section below.
+  - The target filename will be `index.html` in a directory corresponding to the
+    basename of the source file – unless `pretty_path` in the metadata is `false`
+    or the name of the file itself is `index.md` or `index.html` (in which case
+    the relative path is remains the same, except that the extension is of
+    course changed to `.html` if the source is a markdown file).
+  - The processed content will be passed to the Mako template as a string in the
+    context variable `CONTENT`, along with other metadata.
+  - A YAML datasource can be specified in the metadata block as `LOAD`; the data
+    in this file will be added to the context. For further details on the
+    context variables, see the "Context variables" section.
+  - Files that have other extensions than `.md`, `.html` or `.yaml` will be
+    copied directly over to the (appropriate subdirectory of the) `htdocs`
+    directory.  This is so as to enable "bundling", i.e. keeping images and
+    "attachments" together with related markdown files.
 
-- `data`: YAML files for additional metadata.
+- `data`: YAML files for additional metadata. May be referenced in frontmatter
+  data or used by templates. Other data files (CSV, SQLite, etc.) should
+  typically also be placed here.
 
 - `py`: Directory for Python files. This directory is automatically added to the
   front of `sys.path` before Mako is initialized, meaning that Mako templates
@@ -265,17 +284,16 @@ Markdown content, receive the following context variables:
   to the source template), `src_path` (full path to the source template),
   `target` (full path of the file to be written), and `url` (relative url to the
   file to be written).
-- `MDCONTENT`: An `MDContentList` representing all the markdown files which will
-  potentially be rendered by a template. Each item in the list contains the keys
-  `source_file`, `source_file_short` (truncated and full paths to the source),
-  `target` (html file to be written), `template` (filename of the template which
-  will be used for rendering), `data` (most of the context variables seen by
-  this content), `doc` (the raw markdown source), and `url` (the `SELF_URL`
-  value for this content – see below). If the configuration setting `pre_render`
-  is True, then `rendered` (the HTML produced by converting the markdown) is
-  present as well. Note that `MDCONTENT` is not available inside shortcodes.
-  An `MDContentList` is a list object with some convenience methods for
-  filtering and sorting. It is described at the end of this Readme file.
+- `MDCONTENT`: An `MDContentList` representing all the markdown/html files which
+  will potentially be rendered by a template. Each item in the list contains the
+  keys `source_file`, `source_file_short` (truncated and full paths to the
+  source), `target` (html file to be written), `template` (filename of the
+  template which will be used for rendering), `data` (most of the context
+  variables seen by this content), `doc` (the raw markdown source), and `url`
+  (the `SELF_URL` value for this content – see below). Note that `MDCONTENT` is
+  not available inside shortcodes.  An `MDContentList` is a list object with
+  some convenience methods for filtering and sorting. It is described at the end
+  of this Readme file.
 - Whatever is defined under `template_context` in the `wmk_config.yaml` file
   (see the "Configuration file" section below).
 - `SELF_URL`: The relative path to the HTML file which the output of the
@@ -786,10 +804,10 @@ files is `md_base.mhtml`.
 - `page.pretty_path`: If this is true, the basename of the markdown filename (or the
   slug) will become a directory name and the HTML output will be written to
   `index.html` inside that directory. By default it is false for files named
-  `index.md` and true for all other files. If the filename contains symbols that
-  do not match the character class `[\w.,=-]`, then it will be "slugified" before
-  final processing (although this only works for languages using the Latin
-  alphabet).
+  `index.md` or `index.html` and true for all other files. If the filename
+  contains symbols that do not match the character class `[\w.,=-]`, then it
+  will be "slugified" before final processing (although this only works for
+  languages using the Latin alphabet).
 
 - `page.do_not_render`: Tells `wmk` not to write the output of this template to
   a file in `htdocs`. All other processing will be done, so the gathered

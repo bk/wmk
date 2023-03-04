@@ -71,7 +71,7 @@ usage(){
     echo "  wmk watch-serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache <dirname>"
-    echo "Action abbrevs: "
+    echo "Action abbreviations: "
     echo "  b|r|run=build; w=watch; s=serve; ws=watch-serve; c=clear-cache"
     echo "See $WMK_HOME/readme.md for documentation"
 }
@@ -200,7 +200,7 @@ then
             elif [ "$FSWATCH" != "" ]; then
                 echo "  - fswatch used for watch functionality"
             else
-                echo "  - no watch functionality available (need inotify or fswatch)"
+                echo "  - no watch functionality (need inotifywait or fswatch)"
             fi
             ;;
         c|cl|clean|clear|clean-cache|clear-cache)

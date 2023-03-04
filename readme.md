@@ -129,9 +129,9 @@ want to create aliases or wrappers for them.
 ## Usage
 
 The `wmk` command structure is `wmk <action> <base_directory>`. The base
-directory is of course the directory containing the source files in
-subdirectories such as `templates`, `content`, etc.  Also
-see the "File organization" section below.
+directory is of course the directory containing the source files for the site.
+(They are actually in subdirectories such as `templates`, `content`, etc. –
+see the "File organization" section below).
 
 - `wmk info $basedir`: Shows the real path to the location of `wmk.py` and of
   the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
@@ -699,9 +699,13 @@ The following default shortcodes are provided by the `wmk` installation:
   resize operation are only performed once.  The source `path` is taken to be
   relative to the `WEBROOT`, i.e. the project `htdocs` directory.
 
-- `template`: Calls the Mako template named in the first argument. Any
-  additional arguments are passed directly on to the template (which will also
-  see the normal Mako context for the shortcode itself).
+- `template`: The first argument (`template`) is either the filename of a Mako
+  template or literal Mako source code. The heuristic used to distinguish
+  between these two cases is simply that filenames are assumed never to contain
+  whitespace while Mako source code always does. In either case, the template
+  is called and its output inserted into the Markdown file. Any additional
+  arguments are passed directly on to the template (which will also see the
+  normal Mako context for the shortcode itself).
 
 - `twitter`: A tweet. Takes a `tweet_id`, which may be a Twitter status URL or
   the last part (i.e. the actual ID) of the URL.

@@ -14,7 +14,6 @@ import markdown
 import pypandoc
 import lunr
 
-from mako.template import Template
 from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template, TemplateLookupException
 from mako.runtime import Undefined
@@ -25,7 +24,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.11'
+VERSION = '0.9.12'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.

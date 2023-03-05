@@ -35,6 +35,8 @@ The following features are among the ones that set wmk apart:
   well-designed filter system for extending Markdown. Pandoc also enables you to
   export your content to other formats (such as PDF) in addition to HTML, if you
   so wish.
+- Via Pandoc, support for several non-Markdown input formats, namely LaTeX, Org,
+  RST, Textile and man.
 
 The only major feature that wmk is missing compared to some other SSGs is tight
 integration with a Javascript assets pipeline and interaction layer. Thus, if
@@ -239,6 +241,44 @@ content and output. They will be created if they do not exist:
 - `static`: Static files. Everything in here will be rsynced directoy over to
   `htdocs`.
 
+<!-- input_formats "Input formats" 45 -->
+
+## Input formats
+
+The format of the files in the `content/` directory is determined on the basis
+if their file extension. The following extensions are recognized:
+
+- `.md`, `.mdwn`, `.mdown`, `.markdown`, `.gfm`, `.mmd`: Markdown files.  If
+  Pandoc is being used, the input formats `.gfm` and `.mmd` will be assumed to
+  be `gfm` (Github-flavored markdown) and `markdown_mmd` (MultiMarkdown),
+  respectively. (Currently metadata given in MultiMarkdown format is not picked
+  up automatically in `.mmd` files, so YAML frontmatter should be used as well).
+
+- `.htm`, `.html`: HTML. These are typically not standalone HTML documents but
+  will be "wrapped" by the configured layout template. Like other input files,
+  they may have a YAML frontmatter block.
+
+- `.tex`: LaTeX format. Currently ConTeXt is not supported.
+
+- `.org`: Org-mode format.
+
+- `.rst`: ReStructured Text format (RST).
+
+- `.textile`: Textile markup format.
+
+- `.man`: Roff man format.
+
+YAML frontmatter is supported for all the above formats. If it is omitted,
+inherited metadata will be used. In addition, the metadata seen by Pandoc for
+four of the formats, namely LaTeX, Org, RST and man, will be used as a fallback.
+(Common metadata keys discoverable in this way are `title`, `author` and `date`).
+
+Pandoc is turned on automatically for all non-markdown, non-HTML formats.
+In order to use such content, Pandoc must be installed.
+
+Most of what is said in the following about markdown content applies to all of
+the above input formats.
+
 <!-- gotchas "A few gotchas" 50 -->
 
 ## A few gotchas
@@ -274,7 +314,7 @@ website with wmk:
 ## Context variables
 
 The Mako templates, whether they are stand-alone or being used to render
-Markdown content, receive the following context variables:
+Markdown (or other) content, receive the following context variables:
 
 - `DATADIR`: The full path to the `data` directory.
 - `WEBROOT`: The full path to the `htdocs` directory.
@@ -284,12 +324,12 @@ Markdown content, receive the following context variables:
   to the source template), `src_path` (full path to the source template),
   `target` (full path of the file to be written), and `url` (relative url to the
   file to be written).
-- `MDCONTENT`: An `MDContentList` representing all the markdown/html files which
+- `MDCONTENT`: An `MDContentList` representing all the content files which
   will potentially be rendered by a template. Each item in the list contains the
   keys `source_file`, `source_file_short` (truncated and full paths to the
   source), `target` (html file to be written), `template` (filename of the
   template which will be used for rendering), `data` (most of the context
-  variables seen by this content), `doc` (the raw markdown source), and `url`
+  variables seen by this content), `doc` (the raw content document source), and `url`
   (the `SELF_URL` value for this content – see below). Note that `MDCONTENT` is
   not available inside shortcodes.  An `MDContentList` is a list object with
   some convenience methods for filtering and sorting. It is described at the end
@@ -303,13 +343,13 @@ Markdown content, receive the following context variables:
 - `site`: A dict-like object containing the variables specified under the `site`
   key in `wmk_config.yaml`.
 
-When templates are rendering Markdown content, they additionally get the
-following context variables:
+When templates are rendering Markdown (or other) content, they additionally get
+the following context variables:
 
-- `CONTENT`: The rendered HTML produced from the markdown source.
-- `RAW_CONTENT`: The original markdown source.
-- `SELF_FULL_PATH`: The full path to the source Markdown file.
-- `MTIME`: A datetime object representing the modification time for the markdown
+- `CONTENT`: The rendered HTML produced from the source document.
+- `RAW_CONTENT`: The original source document.
+- `SELF_FULL_PATH`: The full path to the source document file.
+- `MTIME`: A datetime object representing the modification time for the source
   file.
 - `DATE`: A datetime object representing the first found value of `date`,
   `pubdate`, `modified_date`, `expire_date`, or `created_date` found in the YAML
@@ -326,7 +366,7 @@ following context variables:
   YAML files from the `data` directory loaded via the `LOAD` directive in the
   metadata.
 
-For further details on context variables set in the markdown frontmatter and in
+For further details on context variables set in the document frontmatter and in
 `index.yaml` files, see the "Site and page variables" section below.
 
 <!-- config "Configuration file" 70 -->
@@ -348,7 +388,7 @@ support for the following settings:
   added to the template context under the key `site`. Also
   see the "Site and page variables" section below.
 
-- `render_drafts`: Normally, markdown files with `draft` set to a true value in
+- `render_drafts`: Normally, content files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
   (so that the `draft` status flag is ignored) by setting `render_drafts` to True
   in the config file.
@@ -382,15 +422,20 @@ support for the following settings:
   Has no effect unless `pandoc` is true. May be set or overridden through
   frontmatter variables.
 
-- `pandoc_input_format`, `pandoc_output_format`: Which input and output formats
-  to assume for Pandoc. The defaults are `markdown` and `html`, respectively.
-  For the former the value should be a markdown subvariant, i.e. one of
-  `markdown` (pandoc-flavoured), `gfm` (github-flavoured), `markdown_mmd`
-  (MultiMarkdown), `markdown_phpextra`, or `markdown_strict`. For the latter,
-  it should be an HTML variant, i.e. either `html`, `html5` or `html4`, or
-  alternatively one of the HTML-based slide formats, i.e. `s5`, `slideous`,
-  `slidy`, `dzslides` or `reavealjs`.  These options have no effect unless
-  `pandoc` is true; both may be overridden through frontmatter variables.
+- `pandoc_input_format`: Which input format to assume for Pandoc. The default is `markdown`.
+  If set, the value should be a markdown subvariant for markdown-like content,
+  i.e. one of `markdown` (pandoc-flavoured), `gfm` (github-flavoured),
+  `markdown_mmd` (MultiMarkdown), `markdown_phpextra`, or `markdown_strict`.
+  (For other supported input formats, there is little reason to set
+  `pandoc_input_format` explicitly, since the format is tied to the file
+  extension). Has no effect unless `pandoc` is true; may also be set as 
+  a frontmatter variable.
+
+- `pandoc_output_format`: Output format for Pandoc. This should be a HTML
+  variant, i.e. either `html`, `html5` or `html4`, or alternatively one of the
+  HTML-based slide formats, i.e.  `s5`, `slideous`, `slidy`, `dzslides` or
+  `reavealjs`. Chunked HTML is not supported. Has no effect unless `pandoc` is
+  true; may also be set as  a frontmatter variable.
 
 - `pandoc_extra_formats`, `pandoc_extra_formats_settings`: If `pandoc` is True,
   then `pandoc_extra_formats` in the frontmatter can be used to convert to
@@ -475,7 +520,7 @@ support for the following settings:
 ## A note on Pandoc
 
 Pandoc's variant of Markdown is very featureful and sophisticated, but since its
-use in `wmk` involves spawning an external process for each Markdown file being
+use in `wmk` involves spawning an external process for each content file being
 converted, it is quite a bit slower than Python-Markdown. Therefore, it is
 only recommended if you really do need it. Often, even if you do, it can be
 turned on for individual pages or site sections rather than for the entire site.
@@ -497,7 +542,8 @@ pandoc, then it will be asked to generate a table of contents which will be
 placed in the indicated location, just like the `toc` extension for
 Python-Markdown does. The `toc_depth` setting (whose default value is 3) is
 respected as well, although only in its integer form and not as a range (such as
-`"2-4"`).
+`"2-4"`). Note that currently this only works for Markdown documents, not for
+other formats such as Org or RST.
 
 
 <!-- themes "Available themes" 90 -->

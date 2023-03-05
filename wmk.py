@@ -24,12 +24,29 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.9.12'
+VERSION = '0.10.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
 KNOWN_DATE_KEYS = (
     'date', 'pubdate', 'modified_date', 'expire_date', 'created_date')
+
+CONTENT_EXTENSIONS = {
+    '.md': {}, # just markdown...
+    '.mdwn': {},
+    '.mdown': {},
+    '.markdown': {},
+    '.mmd': {'pandoc_input_format': 'markdown_mmd'},
+    '.gfm': {'pandoc_input_format': 'gfm'},
+    '.html': {'raw': True},
+    '.htm': {'raw': True},
+    # pandoc-only formats below
+    '.org': {'pandoc': True, 'pandoc_input_format': 'org'},
+    '.rst': {'pandoc': True, 'pandoc_input_format': 'rst'},
+    '.tex': {'pandoc': True, 'pandoc_input_format': 'latex'},
+    '.man': {'pandoc': True, 'pandoc_input_format': 'man'},
+    '.textile': {'pandoc': True, 'pandoc_input_format': 'textile'},
+}
 
 
 def main(basedir=None, quick=False):
@@ -80,8 +97,9 @@ def main(basedir=None, quick=False):
             pass
     os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # support content bundles (mainly images inside content dir)
+    ext_excludes = ' '.join(['--exclude "*{}"'.format(_) for _ in CONTENT_EXTENSIONS.keys()])
     os.system(
-        'rsync -a --exclude "*.md" --exclude "*.html" --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
+        'rsync -a ' + ext_excludes + ' --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
         % (dirs['content'], dirs['output']))
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
@@ -310,11 +328,12 @@ def render_markdown(ct, conf):
     target = ct.get('target', '')
     # The following settings affect cache validity:
     extensions, extension_configs = markdown_extensions_settings(pg, conf)
-    is_html = ct.get('source_file', '').endswith('.html')
+    is_html = pg.get('_is_html', ct.get('source_file', '').endswith('.html'))
     is_pandoc = pg.get('pandoc', conf.get('pandoc', False))
     pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
     pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
-    # This should be a markdown subformat or gfm
+    # This should be a markdown subformat or gfm, unless the extension dictates
+    # otherwise (i.e. rst, org, textile, man)
     pandoc_input = pg.get('pandoc_input_format',
                           conf.get('pandoc_input_format')) or 'markdown'
     # This should be an html subformat
@@ -450,6 +469,9 @@ def doc_with_yaml(pg, doc):
     Put YAML frontmatter back (with possible additions via inheritance), for
     potential use by Pandoc.
     """
+    if pg.get('pandoc_input_format', '') in ('org', 'rst', 'textile', 'man', 'latex'):
+        # skip out unless the input format is markdown-based
+        return doc
     safe_pg = {}
     for k in pg:
         if k == 'DATE' and not 'date' in pg:
@@ -564,17 +586,48 @@ def get_index_yaml_data(ctdir, datadir):
     return ret
 
 
+def pandoc_metadata(doc, fn, projectdir):
+    """
+    Returns the parsed and converted metadata for the standard Pandoc metadata
+    fields (mostly title, date and author). The input format is either LaTeX,
+    Org, RST or man.
+    """
+    tmpdir = os.path.join(projectdir, 'tmp')
+    if not os.path.isdir(tmpdir):
+        os.makedirs(tmpdir)
+    meta_json_tpl = os.path.join(tmpdir, 'meta-json.tpl')
+    if not os.path.exists(meta_json_tpl):
+        with open(meta_json_tpl, 'w') as f:
+            f.write('$meta-json$')
+    fmt = fn[-3:]
+    if fmt == 'tex':
+        fmt = 'latex'
+    cache = RenderCache(doc, str([fn, 'pandoc_metadata']), projectdir)
+    ret = cache.get_cache()
+    if ret:
+        return json.loads(ret)
+    ret = pypandoc.convert_file(
+        fn,
+        'html',
+        format=fmt,
+        extra_args=['--template={}'.format(meta_json_tpl)])
+    cache.write_cache(ret)
+    return json.loads(ret)
+
+
 def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     """
     Get those markdown files that need processing.
     """
     content = []
     default_template = conf.get('default_template', 'md_base.mhtml')
-    default_pretty_path = lambda x: False if x in ('index.md', 'index.html') else True
+    default_pretty_path = lambda x: False if x.startswith('index.') else True
     known_ids = set()
+    known_exts = tuple(CONTENT_EXTENSIONS.keys())
+    extpat = re.compile(r'\.(?:' + '|'.join([_[1:] for _ in known_exts]) + r')$')
     for root, dirs, files in os.walk(ctdir):
         for fn in files:
-            if not fn.endswith(('.md', '.html')):
+            if not fn.endswith(known_exts):
                 continue
             if fn.startswith('_') or fn.startswith('.'):
                 continue
@@ -583,6 +636,17 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             with open(source_file) as f:
                 try:
                     meta, doc = frontmatter.parse(f.read())
+                    # Integrate pandoc's understanding of metadata for
+                    # non-markdown formats (other than textile, which
+                    # uses YAML frontmatter natively).
+                    # NOTE: Currently leads to the file being parsed twice --
+                    # but only on the first pass, since the result is cached
+                    # (regardless of the no_cache setting)
+                    if fn.endswith(('.org', '.rst', '.tex', '.man')):
+                        pmeta = pandoc_metadata(doc, source_file, datadir[:-5])
+                        for k in pmeta:
+                            if not k in meta:
+                                meta[k] = pmeta[k]
                 except Exception as e:
                     raise Exception(
                         "Error when parsing frontmatter for " + source_file + ': ' + str(e))
@@ -669,9 +733,9 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             known_ids.add(page['id'])
             fn = '/'.join(fn_parts)
             if pretty_path:
-                html_fn = re.sub(r'\.(?:md|html)$', '/index.html', fn)
+                html_fn = extpat.sub('/index.html', fn)
             else:
-                html_fn = re.sub(r'\.md$', '.html', fn)
+                html_fn = extpat.sub('.html', fn)
             html_dir = root.replace(ctdir, outputdir, 1)
             target_fn = os.path.join(html_dir, html_fn)
             data['SELF_URL'] = '' if page.get('do_not_render') \
@@ -683,6 +747,14 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             data['RENDERER'] = lambda x: render_markdown(x, conf)
             # convert some common datetime strings to datetime objects
             parse_dates(page)
+            ext = re.search(r'\.\w+$', source_file).group(0)
+            ext_conf = CONTENT_EXTENSIONS[ext]
+            if ext_conf.get('raw', False):
+                page['_is_html'] = True
+            if ext_conf.get('pandoc', False):
+                page['pandoc'] = True
+            if 'pandoc_input_format' in ext_conf and not page.get('pandoc_input_format', None):
+                page['pandoc_input_format'] = ext_conf['pandoc_input_format']
             data['page'] = attrdict(page)
             data['DATE'] = preferred_date(data)
             content.append({

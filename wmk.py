@@ -24,7 +24,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '0.10.0'
+VERSION = '1.0.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -45,7 +45,19 @@ CONTENT_EXTENSIONS = {
     '.rst': {'pandoc': True, 'pandoc_input_format': 'rst'},
     '.tex': {'pandoc': True, 'pandoc_input_format': 'latex'},
     '.man': {'pandoc': True, 'pandoc_input_format': 'man'},
+    '.rtf': {'pandoc': True, 'pandoc_input_format': 'rtf'},
     '.textile': {'pandoc': True, 'pandoc_input_format': 'textile'},
+    '.xml': {'pandoc': True, 'pandoc_input_format': 'jats'},
+    '.jats': {'pandoc': True, 'pandoc_input_format': 'jats'},
+    '.tei': {'pandoc': True, 'pandoc_input_format': 'tei'},
+    '.docbook': {'pandoc': True, 'pandoc_input_format': 'docbook'},
+    # binary formats supported via pandoc (converted to markdown as an intermediary step)
+    '.docx': {'is_binary': True, 'pandoc': True, 'pandoc_binary_format': 'docx',
+              'pandoc_input_format': 'markdown'},
+    '.odt': {'is_binary': True, 'pandoc': True, 'pandoc_binary_format': 'odt',
+             'pandoc_input_format': 'markdown'},
+    '.epub': {'is_binary': True, 'pandoc': True, 'pandoc_binary_format': 'epub',
+             'pandoc_input_format': 'markdown'},
 }
 
 
@@ -332,8 +344,8 @@ def render_markdown(ct, conf):
     is_pandoc = pg.get('pandoc', conf.get('pandoc', False))
     pandoc_filters = pg.get('pandoc_filters', conf.get('pandoc_filters')) or []
     pandoc_options = pg.get('pandoc_options', conf.get('pandoc_options')) or []
-    # This should be a markdown subformat or gfm, unless the extension dictates
-    # otherwise (i.e. rst, org, textile, man)
+    # This should be a markdown/commonmark subformat or gfm, unless the
+    # extension dictates otherwise (e.g. rst, org, textile, man)
     pandoc_input = pg.get('pandoc_input_format',
                           conf.get('pandoc_input_format')) or 'markdown'
     # This should be an html subformat
@@ -469,7 +481,8 @@ def doc_with_yaml(pg, doc):
     Put YAML frontmatter back (with possible additions via inheritance), for
     potential use by Pandoc.
     """
-    if pg.get('pandoc_input_format', '') in ('org', 'rst', 'textile', 'man', 'latex'):
+    input_format = pg.get('pandoc_input_format', 'markdown')
+    if not 'mark' in input_format and input_format != 'gfm':
         # skip out unless the input format is markdown-based
         return doc
     safe_pg = {}
@@ -586,11 +599,12 @@ def get_index_yaml_data(ctdir, datadir):
     return ret
 
 
-def pandoc_metadata(doc, fn, projectdir):
+def pandoc_metadata(doc, fn, fmt, projectdir):
     """
     Returns the parsed and converted metadata for the standard Pandoc metadata
-    fields (mostly title, date and author). The input format is either LaTeX,
-    Org, RST or man.
+    fields (mostly title, date and author). The input format is always a
+    text-based one with native non-YAML metadata (i.e. currently org, rst,
+    latex, man, rtf, xml/jats, tei or docbook).
     """
     tmpdir = os.path.join(projectdir, 'tmp')
     if not os.path.isdir(tmpdir):
@@ -599,9 +613,6 @@ def pandoc_metadata(doc, fn, projectdir):
     if not os.path.exists(meta_json_tpl):
         with open(meta_json_tpl, 'w') as f:
             f.write('$meta-json$')
-    fmt = fn[-3:]
-    if fmt == 'tex':
-        fmt = 'latex'
     cache = RenderCache(doc, str([fn, 'pandoc_metadata']), projectdir)
     ret = cache.get_cache()
     if ret:
@@ -615,6 +626,42 @@ def pandoc_metadata(doc, fn, projectdir):
     return json.loads(ret)
 
 
+def binary_to_markdown(fn, fmt, projectdir=None):
+    "Convert a docx/odt/epub file to markdown for further processing."
+    if projectdir:
+        st = os.stat(fn)
+        fkey = '%d-%d' % (st.st_size, st.st_mtime)
+        cache = RenderCache(fkey, str([fn, fmt, 'binary-to-markdown']), projectdir)
+        doc = cache.get_cache()
+        if not doc:
+            doc = pypandoc.convert_file(
+                fn, 'markdown', format=fmt, extra_args=['--standalone'])
+            cache.write_cache(doc)
+    else:
+        doc = pypandoc.convert_file(
+            fn, 'markdown', format=fmt, extra_args=['--standalone'])
+    meta, doc = frontmatter.parse(doc)
+    meta = maybe_extra_meta(meta, fn)
+    return (meta, doc)
+
+
+def maybe_extra_meta(meta, fn):
+    """
+    Look for a meta file with the same name as the source file, but with '.yaml'
+    appended. If it exists, load it and add any new keys in it to the original
+    metadata.
+    """
+    metafn = fn + '.yaml'
+    if os.path.exists(metafn):
+        with open(metafn) as yf:
+            allmeta = yaml.safe_load_all(yf)
+            for m in allmeta:
+                if m:
+                    m.update(meta)
+                    meta.update(m)
+    return meta
+
+
 def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     """
     Get those markdown files that need processing.
@@ -625,6 +672,8 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     known_ids = set()
     known_exts = tuple(CONTENT_EXTENSIONS.keys())
     extpat = re.compile(r'\.(?:' + '|'.join([_[1:] for _ in known_exts]) + r')$')
+    pandoc_meta_exts = ('.org', '.rst', '.tex', '.man', '.rtf',
+                        '.xml' '.jats', '.tei', '.docbook')
     for root, dirs, files in os.walk(ctdir):
         for fn in files:
             if not fn.endswith(known_exts):
@@ -633,23 +682,34 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 continue
             source_file = os.path.join(root, fn)
             source_file_short = source_file.replace(ctdir, '', 1)
-            with open(source_file) as f:
-                try:
-                    meta, doc = frontmatter.parse(f.read())
-                    # Integrate pandoc's understanding of metadata for
-                    # non-markdown formats (other than textile, which
-                    # uses YAML frontmatter natively).
-                    # NOTE: Currently leads to the file being parsed twice --
-                    # but only on the first pass, since the result is cached
-                    # (regardless of the no_cache setting)
-                    if fn.endswith(('.org', '.rst', '.tex', '.man')):
-                        pmeta = pandoc_metadata(doc, source_file, datadir[:-5])
-                        for k in pmeta:
-                            if not k in meta:
-                                meta[k] = pmeta[k]
-                except Exception as e:
-                    raise Exception(
-                        "Error when parsing frontmatter for " + source_file + ': ' + str(e))
+            ext = re.findall(r'\.\w+$', fn)[0]
+            ext_conf = CONTENT_EXTENSIONS[ext]
+            if ext_conf.get('is_binary'):
+                meta, doc = binary_to_markdown(
+                    source_file, ext_conf.get('pandoc_binary_format'), datadir[:-5])
+                for k in ext_conf:
+                    if not k in meta:
+                        meta[k] = ext_conf[k]
+            else:
+                with open(source_file) as f:
+                    try:
+                        meta, doc = frontmatter.parse(f.read())
+                        meta = maybe_extra_meta(meta, source_file)
+                        # Integrate pandoc's understanding of metadata for
+                        # text-based non-markdown formats (other than textile,
+                        # which uses YAML frontmatter natively).
+                        # NOTE: Currently leads to the file being parsed twice --
+                        # but only on the first pass, since the result is cached
+                        # (regardless of the no_cache setting)
+                        if fn.endswith(pandoc_meta_exts):
+                            input_format = meta.get('pandoc_input_format', ext_conf['pandoc_input_format'])
+                            pmeta = pandoc_metadata(doc, source_file, input_format, datadir[:-5])
+                            for k in pmeta:
+                                if not k in meta:
+                                    meta[k] = pmeta[k]
+                    except Exception as e:
+                        raise Exception(
+                            "Error when parsing frontmatter for " + source_file + ': ' + str(e))
             if meta.get('draft', False) and not conf.get('render_drafts', False):
                 continue
             # data is global vars, page is specific to this markdown file

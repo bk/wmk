@@ -13,14 +13,14 @@ might almost call them standard:
 - Support for themes.
 - Sass/SCSS support (via [`libsass`][libsass]).
 - Can generate a search index for use by [`lunr.js`][lunr].
-- Shortcodes for more expressive and extensible Markdown content.
+- Shortcodes for more expressive and extensible content.
 
 The following features are among the ones that set wmk apart:
 
 - The content is rendered using [Mako][mako], a template system which makes all
   the resources of Python easily available to you.
 - "Stand-alone" templates – i.e. templates that are not used for presenting
-  Markdown-based content – are also rendered if present. This can e.g. be used
+  markdown-based content – are also rendered if present. This can e.g. be used
   for list pages or content based on external sources (such as a database).
 - Additional data for the site may be loaded from separate YAML files ­ or even
   (with a small amount of Python/Mako code) from other data sources such as CSV
@@ -32,11 +32,12 @@ The following features are among the ones that set wmk apart:
 - Optional support for the powerful [Pandoc][pandoc] document converter, for the
   entire site or on a page-by-page basis. This gives you access to such features
   as LaTeX math markup and academic citations, as well as to Pandoc's
-  well-designed filter system for extending Markdown. Pandoc also enables you to
+  well-designed filter system for extending markdown. Pandoc also enables you to
   export your content to other formats (such as PDF) in addition to HTML, if you
   so wish.
-- Via Pandoc, support for several non-Markdown input formats, namely LaTeX, Org,
-  RST, Textile and man.
+- Also via Pandoc, support for several non-markdown input formats for content,
+  namely LaTeX, Org, RST, Textile, man, JATS, TEI, Docbook, RTF, DOCX, ODT and
+  EPUB.
 
 The only major feature that wmk is missing compared to some other SSGs is tight
 integration with a Javascript assets pipeline and interaction layer. Thus, if
@@ -139,7 +140,7 @@ see the "File organization" section below).
   the content base directory. E.g. `wmk info .`. Synonyms for `info` are `env`
   and `debug`.
 
-- `wmk init $basedir`: In a folder which contains `content/` (with Markdown
+- `wmk init $basedir`: In a folder which contains `content/` (with markdown
   or HTML files) but no `wmk_config.yaml`, creates some initial templates as
   well as a sample `wmk_config.yaml`, thus making it quicker for you to start a
   new project.
@@ -187,20 +188,24 @@ content and output. They will be created if they do not exist:
   subdirectory named `base`. For details on context variables received by such
   stand-alone templates, see the "Context variables" section below.
 
-- `content`: Markdown (`*.md`) and/or HTML (`*.html*`) content with YAML
-  metadata.
-  - Markdown will be converted into HTML and then "wrapped" in a layout  using
-    the `template` specified in the metadata or `md_base.mhtml` by default.
+- `content`: typically markdown (`*.md`) and/or HTML (`*.html*`) content with YAML
+  metadata, although other formats are also supported. For a full list,
+  see the "Input formats" section above.
+  - Markdown (or other supported content) will be converted into HTML and then
+    "wrapped" in a layout  using the `template` specified in the metadata or
+    `md_base.mhtml` by default.
   - HTML files inside `content` are assumed to be fragments rather than complete
     documents. Accordingly, they will be wrapped in a layout just like the
-    converted markdown. In general, such content is treated just like Markdown
+    converted markdown. In general, such content is treated just like markdown
     files except that the markdown-to-html conversion step is skipped.  For
     instance, shortcodes can be used normally, although they may not work as
     expected if they return markdown rather than HTML. (Complete HTML documents
     are best placed in `static` rather than `content`).
-  - The YAML metadata may be at the top of the md/html document itself, inside a
-    frontmatter block delimited by `---`, or it may be in `index.yaml` files
-    which are inherited by subdirectories and the files contained in them.
+  - The YAML metadata may be (a) at the top of the md/html document itself,
+    inside a frontmatter block delimited by `---`; (b) in a separate file with
+    the same filename as the content file, but with an extra `.yaml` extension
+    added; or (c) it may be in `index.yaml` files which are inherited by
+    subdirectories and the files contained in them.
     For details, see the "Site and page variables" section below.
   - The target filename will be `index.html` in a directory corresponding to the
     basename of the source file – unless `pretty_path` in the metadata is `false`
@@ -251,8 +256,8 @@ if their file extension. The following extensions are recognized:
 - `.md`, `.mdwn`, `.mdown`, `.markdown`, `.gfm`, `.mmd`: Markdown files.  If
   Pandoc is being used, the input formats `.gfm` and `.mmd` will be assumed to
   be `gfm` (Github-flavored markdown) and `markdown_mmd` (MultiMarkdown),
-  respectively. (Currently metadata given in MultiMarkdown format is not picked
-  up automatically in `.mmd` files, so YAML frontmatter should be used as well).
+  respectively. Note, however, that currently non-YAML metadata given in
+  MultiMarkdown format is not picked up automatically in `.mmd` files).
 
 - `.htm`, `.html`: HTML. These are typically not standalone HTML documents but
   will be "wrapped" by the configured layout template. Like other input files,
@@ -268,27 +273,53 @@ if their file extension. The following extensions are recognized:
 
 - `.man`: Roff man format.
 
-YAML frontmatter is supported for all the above formats. If it is omitted,
-inherited metadata will be used. In addition, the metadata seen by Pandoc for
-four of the formats, namely LaTeX, Org, RST and man, will be used as a fallback.
-(Common metadata keys discoverable in this way are `title`, `author` and `date`).
+- `.rtf`: Rich Text Format (RTF).
+
+- `.jats`, `.xml`: The XML-based JATS (Journal Article Tag Suite) format.
+
+- `.docbook`: The XML-based DocBook format.
+
+- `.tei`: The Simple variant of the XML-based TEI (Text Encoding Intiative)
+  format.
+
+- `.docx`: MS Word DOCX a.k.a. "Office Open XML" format.
+
+- `.odt`: OpenDocument Text format.
+
+- `.epub`: The EPUB e-book format.
 
 Pandoc is turned on automatically for all non-markdown, non-HTML formats.
-In order to use such content, Pandoc must be installed.
+In order to use such content, Pandoc therefore *must* be installed.
 
-Most of what is said in the following about markdown content applies to all of
-the above input formats.
+**Note:** The three formats JATS, DocBook and TEI are all XML-based. Files in
+all three formats would therefore often use the generic `.xml` extension.
+However, `wmk` currently assumes that `.xml` implies that the JATS format is
+intended. If you want to force `wmk` to handle a file with that extension as
+DocBook or TEI, you would have to add an external YAML metadata file with
+`pandoc_input_format` set to the appropriate value.
+
+In-file YAML frontmatter is supported for all of the above except for the three
+binary formats DOCX, ODT and EPUB. Of course, metadata from an associated
+external YAML file or inherited metadata applies in all cases. In addition, the
+"native" metadata seen by Pandoc for most of the formats (more precisely all
+non-markdown, non-HTML formats other than Textile, which uses YAML frontmatter
+natively) will be used as a fallback source of in-file metadata, although this
+is limited to specific standard keys such as `title`, `author` and `date`.
+
+Note that although other input formats are supported, the *canonical* format is
+still markdown. Unless there is a special reason to do otherwise it is the most
+sensible and efficient choice for websites generated using `wmk`.
 
 <!-- gotchas "A few gotchas" 50 -->
 
 ## A few gotchas
 
-The following are some of the things you might find surprising when creating a
-website with wmk:
+When creating a website with wmk, you might want to keep the following things in
+mind lest they surprise you:
 
 * The order of operations is as follows: (1) Copy files from `static/`; (2) run
   asset pipeline; (3) render Mako templates from `templates`; (4) render
-  Markdown content from `content`. As a consequence, later steps **may
+  markdown content from `content`. As a consequence, later steps **may
   overwrite** files placed by earlier steps. This is intentional but definitely
   something to keep in mind.
 
@@ -297,7 +328,7 @@ website with wmk:
   templates, markdown files and SCSS sources. The check is rather primitive and
   does not take account of such things as shortcodes or changed dependencies
   in the template chain. As a rule, `--quick` is therefore **not recommended**
-  unless you are working on a small, self-contained set of Markdown files.
+  unless you are working on a small, self-contained set of content files.
 
 * If templates or shortcodes have been changed it may sometimes be necessary to
   clear out the page rendering cache with `wmc c`. During development you may
@@ -314,7 +345,7 @@ website with wmk:
 ## Context variables
 
 The Mako templates, whether they are stand-alone or being used to render
-Markdown (or other) content, receive the following context variables:
+markdown (or other) content, receive the following context variables:
 
 - `DATADIR`: The full path to the `data` directory.
 - `WEBROOT`: The full path to the `htdocs` directory.
@@ -343,7 +374,7 @@ Markdown (or other) content, receive the following context variables:
 - `site`: A dict-like object containing the variables specified under the `site`
   key in `wmk_config.yaml`.
 
-When templates are rendering Markdown (or other) content, they additionally get
+When templates are rendering markdown (or other) content, they additionally get
 the following context variables:
 
 - `CONTENT`: The rendered HTML produced from the source document.
@@ -413,7 +444,7 @@ support for the following settings:
     in the `wikilinks` frontmatter setting will be passed on to the extension.
     Example: `wikilinks: {'base_url': '/somewhere'}`.
 
-- `pandoc`: Normally [Python-Markdown][pymarkdown] is used for Markdown
+- `pandoc`: Normally [Python-Markdown][pymarkdown] is used for markdown
   processing, but if this boolean setting is true, then Pandoc via
   [Pypandoc][pypandoc] is used by default instead. This can be turned off or on
   through frontmatter variables as well.
@@ -422,20 +453,22 @@ support for the following settings:
   Has no effect unless `pandoc` is true. May be set or overridden through
   frontmatter variables.
 
-- `pandoc_input_format`: Which input format to assume for Pandoc. The default is `markdown`.
-  If set, the value should be a markdown subvariant for markdown-like content,
-  i.e. one of `markdown` (pandoc-flavoured), `gfm` (github-flavoured),
-  `markdown_mmd` (MultiMarkdown), `markdown_phpextra`, or `markdown_strict`.
-  (For other supported input formats, there is little reason to set
-  `pandoc_input_format` explicitly, since the format is tied to the file
-  extension). Has no effect unless `pandoc` is true; may also be set as 
-  a frontmatter variable.
+- `pandoc_input_format`: Which input format to assume for Pandoc; has no effect
+  unless `pandoc` is true. The default value is `markdown`.  If set, the value
+  should be a markdown subvariant for markdown-like content, i.e. one of
+  `markdown` (pandoc-flavoured), `gfm` (github-flavoured), `markdown_mmd`
+  (MultiMarkdown), `markdown_phpextra`, `markdown_strict`, `commonmark`, or
+  `commonmark_x`. As for other supported input formats, there is little reason
+  to set `pandoc_input_format` explicitly for them, since they have no variants
+  in the relevant sense, and the right format is picked based on the file
+  extension. May be set or overridden through frontmatter variables.
 
-- `pandoc_output_format`: Output format for Pandoc. This should be a HTML
-  variant, i.e. either `html`, `html5` or `html4`, or alternatively one of the
-  HTML-based slide formats, i.e.  `s5`, `slideous`, `slidy`, `dzslides` or
-  `reavealjs`. Chunked HTML is not supported. Has no effect unless `pandoc` is
-  true; may also be set as  a frontmatter variable.
+
+- `pandoc_output_format`: Output format for Pandoc; has no effect unless
+  `pandoc` is true. This should be a HTML variant, i.e. either `html`, `html5`
+  or `html4`, or alternatively one of the HTML-based slide formats, i.e.  `s5`,
+  `slideous`, `slidy`, `dzslides` or `reavealjs`. Chunked HTML (new in Pandoc 3)
+  is not supported. May be set or overridden through frontmatter variables.
 
 - `pandoc_extra_formats`, `pandoc_extra_formats_settings`: If `pandoc` is True,
   then `pandoc_extra_formats` in the frontmatter can be used to convert to
@@ -448,10 +481,10 @@ support for the following settings:
   and/or `filters`, or a list (which then is interpreted as the value of
   the `extra_args` setting).
 
-- `use_cache`: boolean, True by default. If you set this to False, the Markdown
+- `use_cache`: boolean, True by default. If you set this to False, the
   rendering cache will be disabled. This is useful for small and medium-sized
   projects where the final HTML output often depends on factors other than the
-  Markdown files themselves. Note that caching for a specific file can be turned
+  content file alone. Note that caching for a specific file can be turned
   off by putting `no_cache: true` in the frontmatter.
 
 - `cache_mtime_matters`: boolean, False by default. Normally only the body of
@@ -519,7 +552,7 @@ support for the following settings:
 
 ## A note on Pandoc
 
-Pandoc's variant of Markdown is very featureful and sophisticated, but since its
+Pandoc's variant of markdown is very featureful and sophisticated, but since its
 use in `wmk` involves spawning an external process for each content file being
 converted, it is quite a bit slower than Python-Markdown. Therefore, it is
 only recommended if you really do need it. Often, even if you do, it can be
@@ -537,12 +570,12 @@ is one extension which is partially emulated in `wmk`'s Pandoc setup, namely
 [toc](https://python-markdown.github.io/extensions/toc/).
 
 If the `toc` frontmatter variable is true and the string `[TOC]` is
-present on a separate line in a Markdown document which is to be processed by
+present on a separate line in a markdown document which is to be processed by
 pandoc, then it will be asked to generate a table of contents which will be
 placed in the indicated location, just like the `toc` extension for
 Python-Markdown does. The `toc_depth` setting (whose default value is 3) is
 respected as well, although only in its integer form and not as a range (such as
-`"2-4"`). Note that currently this only works for Markdown documents, not for
+`"2-4"`). Note that currently this only works for markdown documents, not for
 other formats such as Org or RST.
 
 
@@ -583,8 +616,9 @@ the content, followed by any number of whitespace characters and the closing tag
 `>}}`.
 
 A typical use case is to easily embed content from external sites into your
-Markdown. More advanced possibilities include formatting a table containing data
-from a CSV file or generating a cropped and scaled thumbnail image.
+markdown (or other) content. More advanced possibilities include formatting a
+table containing data from a CSV file or generating a cropped and scaled
+thumbnail image.
 
 Shortcodes are implemented as Mako components named `<shortcode>.mc` in the
 `shortcodes` subdirectory of `templates` (or of some other directory in your
@@ -601,23 +635,24 @@ variable, `nth`, indicating number of invocations for that kind of shortcode in
 that markdown document; (4) `LOOKUP`, the Mako `TemplateLookup` object; and (5)
 the global template variables.
 
-Shortcodes are applied **before** the Markdown document is converted to HTML, so
-it is possible to replace a shortcode with Markdown content which will then be
-processed normally.
+Shortcodes are applied **before** the content document is converted to HTML, so
+it is possible to replace a shortcode with markdown content which will then be
+processed normally. Note, however, that this may lead to undesirable results
+when you use such shortcodes in a non-markdown content document.
 
 A consequence of this is that shortcodes do **not** have direct access to (1)
 the list of files to be processed, i.e. `MDCONTENT`, or (2) the rendered HTML
 (including the parts supplied by the Mako template). A shortcode which needs
-either of these must place a (potential) placeholder in the Markdown source as
+either of these must place a (potential) placeholder in the markdown source as
 well as a callback in `page.POSTPROCESS`. Each callback in this list will be
 called just before the generated HTML is written to `htdocs/` (or, in the case
-of a cached page, after Markdown processing but right before the Mako layout
+of a cached page, after document conversion but right before the Mako layout
 template is called), receiving the full HTML as a first argument followed by the
 rest of the context for the page.  Examples of such shortcodes are `linkto` and
 `pagelist`, described below.  (For more on `page.POSTPROCESS` and
 `page.PREPROCESS`, see the "Site and page variables" section below).
 
-Here is an example of a shortcode in Markdown:
+Here is an example of a simple shortcode call in markdown content:
 
 ```markdown
 ### Yearly expenses
@@ -676,8 +711,9 @@ Although they appear similar, **crocodiles** and **alligators** differ in easy-t
 """) >}}
 ```
 
-In this example, the caption contains Markdown which would be converted to HTML
-by the shortcode component.
+In this example, the caption contains markdown which would be converted to HTML
+by the shortcode component (assuming we're dealing with the default `figure`
+shortcode).
 
 Note that shortcodes are not escaped inside code blocks, so if you need to show
 examples of shortcode usage in your content they must be escaped in some way in
@@ -705,7 +741,7 @@ The following default shortcodes are provided by the `wmk` installation:
   defaults to the empty string), indicating what to show if the file is not
   found. The file must be inside the content directory (`CONTENTDIR`), otherwise
   it will not be read. The path is interpreted as relative to the directory in
-  which the Markdown file is placed. A path starting with `/` is taken to start
+  which the content file is placed. A path starting with `/` is taken to start
   at `CONTENTDIR`.  Nested includes are possible but the paths of subincludes
   are interpreted relative to the original directory (rather than the directory
   in which the included file has been placed). Note that `include()` is always
@@ -749,7 +785,7 @@ The following default shortcodes are provided by the `wmk` installation:
   template or literal Mako source code. The heuristic used to distinguish
   between these two cases is simply that filenames are assumed never to contain
   whitespace while Mako source code always does. In either case, the template
-  is called and its output inserted into the Markdown file. Any additional
+  is called and its output inserted into the content document. Any additional
   arguments are passed directly on to the template (which will also see the
   normal Mako context for the shortcode itself).
 
@@ -773,14 +809,14 @@ The following default shortcodes are provided by the `wmk` installation:
 
 ## Site and page variables
 
-When a markdown file is rendered, the Mako template receives a number of
-context variables as partly described above. A few of these variables, such as
-`MDTEMPLATES` and `DATADIR` set directly by `wmk` (see above). Others are
-user-configured either (1) in `wmk_config.yaml` (the contents of the `site`
-object and potentially additional "global" varaibles in `template_context`); or
-(2) the cascade of `index.yaml` files in the `content` directory and its
-subdirectories along with the YAML frontmatter of the markdown file itself, the
-result of which is placed in the `page` object. 
+When a markdown file (or other supported content) is rendered, the Mako template
+receives a number of context variables as partly described above. A few of these
+variables, such as `MDTEMPLATES` and `DATADIR` set directly by `wmk` (see
+above). Others are user-configured either (1) in `wmk_config.yaml` (the contents
+of the `site` object and potentially additional "global" varaibles in
+`template_context`); or (2) the cascade of `index.yaml` files in the `content`
+directory and its subdirectories along with the YAML frontmatter of the markdown
+file itself, the result of which is placed in the `page` object.
 
 When gathering the content of the `page` variable, `wmk` will
 start by looking for `index.yaml` files in each parent directory of the markdown
@@ -788,6 +824,13 @@ file in question, starting at the root of the `content` directory and moving
 upwards, at each step extending and potentially overriding the data gathered at
 previous stages. Only then will the YAML in the frontmatter of the file itself
 be parsed and added to the `page` data.
+
+The file-specific frontmatter may be in the content file itself, or it may be in
+a separate YAML file with the same name as the content file but with an extra
+`.yaml` extension. For instance, if the content filename is `important.md`, then
+the YAML file would be named `important.md.yaml`. If both in-file and external
+frontmatter is present, the two will be merged, with the in-file values
+"winning" in case of conflict.
 
 At any point, a data source in this cascade may specify an extra YAML file using
 the special `LOAD` variable. This file will then be loaded as well and
@@ -867,9 +910,8 @@ files is `md_base.mhtml`.
 - `page.draft`: If this is true, it prevents further processing of the markdown
   file unless `render_drafts` has been set to true in the config file.
 
-- `page.no_cache`: If this is true, the Markdown rendering cache will not be
-  used for this file. (See also the `use_cache` setting in the configuration
-  file).
+- `page.no_cache`: If this is true, the rendering cache will not be used for
+  this file. (See also the `use_cache` setting in the configuration file).
 
 - `page.markdown_extensions`, `page.markdown_extension_configs`, `page.pandoc`,
   `page.pandoc_filters`, `page.pandoc_options`, `page.pandoc_input_format`,
@@ -887,9 +929,10 @@ files is `md_base.mhtml`.
   return the processed html.
 
 - `page.PREPROCESS`: This is analogous to `page.POSTPROCESS`, except that the
-  instructions in the list are applied to the Markdown just before converting it
-  to HTML. The function receives two arguments: the Markdown document text and
-  the `page` object. It should return the altered Markdown.
+  instructions in the list are applied to the markdown (or other content
+  document) just before converting it to HTML. The function receives two
+  arguments: the document text and the `page` object. It should return the
+  altered document.
 
 Note that if two files in the same directory have the same slug, they may both
 be rendered to the same output file; it is unpredictable which of them will go
@@ -1081,7 +1124,7 @@ Mako, the following filters are by default made available in templates:
 - `slugify`: Turns a string into a slug. Only works for strings in the Latin
   alphabet.
 
-- `markdownify`: Convert Markdown to HTML. It is possible to specify custom
+- `markdownify`: Convert markdown to HTML. It is possible to specify custom
   extensions using the `extensions` argument.
 
 - `truncate`: Convert markdown/html to plaintext and return the first `length`
@@ -1125,7 +1168,7 @@ entries for which the predicate (`pred`) is True.
 
 - `match_entry(self, pred)`: The `pred` (i.e. predicate) is a callable which
   receives the full information on each entry in the `MDContentList` and returns
-  True or False. 
+  True or False.
 
 - `match_ctx(self, pred)`: The `pred` receives the context for each entry and
   returns a boolean.
@@ -1139,8 +1182,8 @@ entries for which the predicate (`pred`) is True.
 - `url_match(self, url_pred)`: The `pred` receives the `url` (relative to
   `htdocs`) for each entry and returns a boolean.
 
-- `path_match(self, src_pred)`: The `pred` receives the path to the Markdown
-  source for each entry and returns a boolean.
+- `path_match(self, src_pred)`: The `pred` receives the path to the source
+  document for each entry and returns a boolean.
 
 ### Specialized searching/filtering
 
@@ -1347,6 +1390,8 @@ server-side or hosted solution such as [Algolia](https://www.algolia.com/) or
   using the information in `idx.summaries.json`, this must currently be solved
   independently by the template/theme author.
 
-- Note that only the raw Markdown content is indexed, not the HTML after the
-  Markdown has been processed. The output of Mako templates (including shortcodes)
-  is not indexed either.
+- Note that only the raw content document is indexed, not the HTML after the
+  markdown (or other input content) has been processed. The only exception to
+  this is that the binary input formats (DOCX, ODT, EPUB) are converted to
+  markdown before being indexed. The output of Mako templates (including
+  shortcodes called from the content documents) is not indexed either.

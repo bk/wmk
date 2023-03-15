@@ -26,6 +26,8 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_app
                 match += 'index.html'
             match = match.replace('.html', r'\.html')
             match = [{'url': match+'$'}]
+        elif '*' in match or '[' in match or '+' in match:
+            match = [{'title': match}, {'path': match}]
         elif not ' ' in match and not '/' in match:
             match = re.sub(r'[ _-]', r'[_ -]', match)
             match = [
@@ -33,8 +35,6 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_app
                 {'title': '^'+match+'$'},
                 {'path': '/'+match+r'\.md$'},
                 {'url': '/'+match+r'(?:\.html|/index\.html)$'}]
-        elif '*' in match or '[' in match or '+' in match:
-            match = [{'title': match}, {'path': match}]
         else:
             match = r'\b' + match + r'\b'
             match = re.sub(r'[ _]', r'[_ -]', match)

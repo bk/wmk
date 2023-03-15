@@ -1,6 +1,9 @@
 import datetime
 import time
 import re
+import os
+import hashlib
+import shutil
 from email.utils import formatdate  # rfc822
 
 import markdown
@@ -244,3 +247,37 @@ def cleanurl(s):
     if s.endswith('/index.html'):
         return s[:-10]
     return s
+
+
+def fingerprint_gen(webroot=None, assets_map=None):
+    """
+    Returns a filtering def which will be named 'fingerprint' in the Mako
+    environment and which fingerprints the path to a file starting with '/' and
+    having a file extension, looking for it either (a) in the assets_map dict or
+    (b) under the webroot directory. In the latter case, it calculates a SHA1
+    hash based on its contents, inserting the start of the hash before the file
+    extension. If a file with the corresponding name does not exist it copies
+    the original file there. Returns the modified name.
+    """
+    def fingerprint(s):
+        if not (webroot or assets_map):
+            return s
+        if not isinstance(s, str):
+            return s
+        ns = assets_map.get(s) if assets_map else None
+        if ns:
+            return ns
+        if not webroot:
+            return s
+        if not (s.startswith('/') and re.search(r'\.\w{1,8}$', s)):
+            return s
+        full_path = os.path.join(webroot, s.strip('/'))
+        if not os.path.isfile(full_path):
+            return s
+        with open(full_path, 'rb') as f:
+            hash = hashlib.sha1(f.read()).hexdigest()[:12]
+        new_full_path = re.sub(r'\.(\w+)$', '.' + hash + '.' + r'\1', full_path)
+        if not os.path.exists(new_full_path):
+            shutil.copyfile(full_path, new_full_path)
+        return re.sub(r'\.(\w+)$', '.' + hash + '.' + r'\1', s)
+    return fingerprint

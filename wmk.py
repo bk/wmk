@@ -121,7 +121,7 @@ def main(basedir=None, quick=False):
     process_assets(
         dirs['assets'], theme_assets, dirs['output'],
         conf, css_dir_from_start, force)
-    assets_map = fingerprint_assets(conf, dirs['output'])
+    assets_map = fingerprint_assets(conf, dirs['output'], dirs['data'])
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
@@ -616,7 +616,7 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
         print('[%s] - sass: refresh' % datetime.datetime.now())
 
 
-def fingerprint_assets(conf, webroot):
+def fingerprint_assets(conf, webroot, datadir):
     """
     Fingerprint (i.e. add hash to filename) files in the specified directories
     under the webroot, 'js/' and 'css/' by default.  For this to happen,
@@ -639,7 +639,8 @@ def fingerprint_assets(conf, webroot):
         },
     }
     fpr_dirs = conf.get('assets_fingerprinting_conf', default_fpr_dirs)
-    assets_map = {}
+    # Potentially load an initial assets map from conf or an external data file
+    assets_map = get_assets_map(conf, datadir) or {}
     for dirkey in fpr_dirs:
         dirname = os.path.join(webroot, dirkey.strip('/'))
         if not os.path.isdir(dirname):

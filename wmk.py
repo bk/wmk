@@ -6,6 +6,9 @@ import datetime
 import re
 import ast
 import json
+import subprocess
+import hashlib
+import shutil
 
 import sass
 import yaml
@@ -24,7 +27,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -118,6 +121,7 @@ def main(basedir=None, quick=False):
     process_assets(
         dirs['assets'], theme_assets, dirs['output'],
         conf, css_dir_from_start, force)
+    assets_map = fingerprint_assets(conf, dirs['output'])
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
@@ -129,6 +133,11 @@ def main(basedir=None, quick=False):
     }
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
+    # If assets_fingerprinting is off fallback to the 'assets_map' setting
+    template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
+    # Used as a filter in Mako templates
+    template_vars['fingerprint'] = wmf.fingerprint_gen(
+            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
     lookup_dirs = [dirs['templates']]
     if themedir and os.path.exists(os.path.join(themedir, 'templates')):
         lookup_dirs.append(os.path.join(themedir, 'templates'))
@@ -160,6 +169,26 @@ def main(basedir=None, quick=False):
     process_templates(templates, lookup, template_vars, force)
     # 6) render Markdown/HTML content
     process_markdown_content(content, lookup, conf, force)
+
+
+def get_assets_map(conf, datadir):
+    if not 'assets_map' in conf:
+        return {}
+    am = conf['assets_map']
+    if isinstance(am, dict):
+        return conf['assets_map']
+    elif isinstance(am, str):
+        if not am.endswith(('.json', '.yaml')):
+            return {}
+        path = os.path.join(datadir, am.strip('/'))
+        if not os.path.exists(path):
+            return {}
+        with open(path) as f:
+            if am.endswith('.json'):
+                return json.loads(f.read())
+            elif am.endswith('yaml'):
+                return yaml.safe_load(f)
+    return {}
 
 
 def get_dirs(basedir):
@@ -541,8 +570,26 @@ def markdown_extensions_settings(pg, conf):
 def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, force):
     """
     Compiles assets from assetdir into outputdir.
-    Only handles sass/scss files in the scss subdirectory for now.
+    - Runs arbitrary commands from conf['assets_commands'], if specified.
+    - Then handles sass/scss files in the scss subdirectory unless conf['use_sass'] is False.
     """
+    assets_commands = conf.get('assets_commands', [])
+    if assets_commands:
+        # since timestamp check for normal scss will probably be useless now
+        force = True
+    for cmd in assets_commands:
+        print('[%s] - assets command: %s' % (datetime.datetime.now(), cmd))
+        basedir = os.path.split(assetdir.rstrip('/'))[0]
+        ret = subprocess.run(
+            cmd, cwd=basedir, shell=True, capture_output=True, encoding='utf-8')
+        if ret.returncode == 0 and ret.stdout:
+            print('  **OK**:', ret.stdout)
+        elif ret.returncode != 0:
+            print('  **WARNING** assets command error [exitcode={}]:'.format(
+                ret.returncode), ret.stderr)
+    sass_active = conf.get('use_sass', True)
+    if not sass_active:
+        return
     scss_input = os.path.join(assetdir, 'scss')
     theme_scss = os.path.join(theme_assets, 'scss') if theme_assets else None
     if not (os.path.exists(scss_input) or (
@@ -567,6 +614,51 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
         sass.compile(
             dirname=(scss_input, css_output), output_style=output_style, **include_paths)
         print('[%s] - sass: refresh' % datetime.datetime.now())
+
+
+def fingerprint_assets(conf, webroot):
+    """
+    Fingerprint (i.e. add hash to filename) files in the specified directories
+    under the webroot, 'js/' and 'css/' by default.  For this to happen,
+    'assets_fingerprinting' must be set to a true value in the configuration
+    file. The directories and filename patterns may be specified in
+    'assets_fingerprinting_conf' if needed.
+    """
+    fpr_on = conf.get('assets_fingerprinting', False)
+    if not fpr_on:
+        return
+    # The keys are directory names
+    default_fpr_dirs = {
+        'js': {
+            'pattern': r'\.m?js$', # pattern is required
+            'except': r'\.[0-9a-f]{12}\.', # optional (this is the default)
+        },
+        'css': {
+            'pattern': r'\.css$',
+            'except': r'\.[0-9a-f]{12}\.'
+        },
+    }
+    fpr_dirs = conf.get('assets_fingerprinting_conf', default_fpr_dirs)
+    assets_map = {}
+    for dirkey in fpr_dirs:
+        dirname = os.path.join(webroot, dirkey.strip('/'))
+        if not os.path.isdir(dirname):
+            continue
+        for root, dirs, files in os.walk(dirname):
+            pat = re.compile(fpr_dirs[dirkey]['pattern'])
+            exc = re.compile(fpr_dirs[dirkey].get('except', r'\.[0-9a-f]{12}\.'))
+            for fn in files:
+                if not pat.search(fn) or exc.search(fn):
+                    continue
+                full_path = os.path.join(root, fn)
+                with open(full_path, 'rb') as f:
+                    hash = hashlib.sha1(f.read()).hexdigest()[:12]
+                hashed_path = re.sub(r'\.(\w+)$', '.' + hash + '.' + r'\1', full_path)
+                assets_map[full_path[len(webroot):]] = hashed_path[len(webroot):]
+                if os.path.exists(hashed_path):
+                    continue
+                shutil.copyfile(full_path, hashed_path)
+    return assets_map
 
 
 def get_index_yaml_data(ctdir, datadir):

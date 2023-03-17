@@ -40,9 +40,10 @@ The following features are among the ones that set wmk apart:
   EPUB.
 
 The only major feature that wmk is missing compared to some other SSGs is tight
-integration with a Javascript assets pipeline and interaction layer. Thus, if
-your site is reliant upon React, Vue or similar, then wmk is probably not the
-best way to go.
+integration with a Javascript assets pipeline and interaction layer. Although
+wmk allows you to configure virtually any assets processing you like, this
+nevertheless means that if your site is reliant upon React, Vue or similar, then
+other options are probably more convenient.
 
 That exception aside, wmk is suitable for building any small or medium-sized
 static website (up to a few hundred pages).
@@ -239,9 +240,13 @@ content and output. They will be created if they do not exist:
   directly rather than having to do it via a shortcode. (For more on `PRE-` and
   `POSTPROCESS`, see the "Site and page variables" section).
 
-- `assets`: Assets for an asset pipeline. Currently this only handles SCSS/Sass
-  files in the subdirectory `scss`. They will be compiled to CSS which is placed
-  in the target directory `htdocs/css`.
+- `assets`: Assets for an asset pipeline. The only default handling of assets
+  involves compiling SCSS/Sass files in the subdirectory `scss`. They will be
+  compiled to CSS which is placed in the target directory `htdocs/css`. Other
+  assets handling can be configured via settings in the configuration file, e.g.
+  `assets_commands` and `assets_fingerprinting`. This will be described in more
+  detail in the "Site and page variables" section. Also take note of the
+  `fingerprint` template filter, described in the "Template filters" section.
 
 - `static`: Static files. Everything in here will be rsynced directoy over to
   `htdocs`.
@@ -371,6 +376,8 @@ markdown (or other) content, receive the following context variables:
   template will be written to.
 - `SELF_TEMPLATE`: The path to the current template file (from the template
   root).
+- `ASSETS_MAP`: A map of fingerprinted assets (such as javascript or css files),
+  used by the `fingerprint` template filter.
 - `site`: A dict-like object containing the variables specified under the `site`
   key in `wmk_config.yaml`.
 
@@ -494,9 +501,39 @@ support for the following settings:
   affects the cache key, so touching the file is sufficient for refreshing its
   cache entry.
 
+- `use_sass`: A boolean indicating whether to handle Sass/SCSS files in `assets/scss`
+  automatically. True by default.
+
 - `sass_output_style`: The output style for Sass/SCSS rendering. This should be
   one of `compact`, `compressed`, `expanded` or `nested`. The default is
-  `expanded`.
+  `expanded`. Has no effect if `use_sass` is false.
+
+- `assets_map`: An assets map is a mapping from filenames or aliases to names
+  of files containing a hash identifier (under the webroot). A typical entry
+  might thus map from `/css/style.css` to `/css/style.1234abcdef56.css`. The
+  value of this setting is either a dict or the name of a JSON or YAML file
+  (inside the data directory) containg the mapping. It will be available to
+  templates as `ASSETS_MAP`.
+
+- `assets_fingerprinting`: A boolean indicating whether to automatically
+  fingerprint assets files (i.e. add hash indicators to their names). If true,
+  any fingerprinted files will be added to the `ASSETS_MAP` template variable.
+
+- `assets_fingerprinting_conf`: A dict where the keys are subdirectories of the
+  webroot, e.g. `js` or `img/icons`, and the values are dicts containing the
+  keys `pattern` and (optionally) `exclude`. These are regular expressions
+  indicating which files to fingerprint under these directories. The filename is
+  fingerprinted if it matches `pattern` but does not match `exclude`. (The
+  default value of `exclude` looks for files that appear to have been
+  fingerprinted already and thus does not normally need to be set). The default
+  value of this setting is a simple setup for the `js` and `css` subdirectories
+  of the webroot.
+
+- `assets_commands`: A list of arbitrary commands to run at the assets
+  compilation stage (just before Sass/SCSS files in `assets/scss` are processed,
+  assuming `use_sass` is not false). The commands are run in order inside the
+  base directory of the site. Example: `['bin/fetch_external_assets.sh', 'node
+  esbuild.mjs']`.
 
 - `lunr_index`: If this is True, a search index for `lunr.js` is written as a
   file named `idx.json` in the root of the `htdocs/` directory. Basic
@@ -1144,6 +1181,11 @@ Mako, the following filters are by default made available in templates:
   not be preserved.
 
 - `cleanurl`: Remove trailing 'index.html' from URLs.
+
+- `fingerprint`: Replace an unadorned path to an assets file with its
+  fingerprinted (i.e. versioned) equivalent. Example: `${ '/js/site.js' | fingerprint }`.
+  Uses the corresponding entry from the `ASSETS_MAP` context variable if it is
+  available but otherwise proceeds to do the fingerprinting itself.
 
 If you wish to provide additional filters without having to explicitly define or
 import them in templates, the best way of doing this his to add them via the

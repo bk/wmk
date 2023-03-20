@@ -53,6 +53,16 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
+wmk_conf(){
+    if test -s "$WMK_CONF_PATH"
+    then
+        python3 -c \
+            "import yaml;c=yaml.safe_load(open('$WMK_CONF_PATH'));print(c.get('$1','$2'));"
+    else
+        echo "$2"
+    fi
+}
+
 wmk_http_conf(){
     if test -s "$WMK_CONF_PATH"
     then
@@ -148,10 +158,11 @@ then
             if [[ ! -e "$WMK_CONF_PATH" ]]; then
                 echo "WARNING: $WMK_CONFIG not found!"
             fi
-            if [[ ! -e "$BASEDIR/htdocs" ]]; then
-                echo "WARNING: no $(realpath "$BASEDIR")/htdocs found!"
+            outdir=$(wmk_conf output_directory htdocs)
+            if [[ ! -e "$BASEDIR/$outdir" ]]; then
+                echo "WARNING: no $(realpath "$BASEDIR")/$outdir found!"
             fi
-            python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/htdocs"
+            python3 -m http.server "$PORT" --bind "$IP" --directory "$BASEDIR/$outdir"
             ;;
         r|b|run|build)
             "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"

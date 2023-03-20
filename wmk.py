@@ -27,7 +27,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -66,7 +66,7 @@ CONTENT_EXTENSIONS = {
 
 def main(basedir=None, quick=False):
     """
-    Builds/copies everything into the output dir (htdocs).
+    Builds/copies everything into the output dir (normally htdocs).
     """
     # `force` mode is now the default and is turned on by setting --quick
     force = not quick
@@ -81,7 +81,8 @@ def main(basedir=None, quick=False):
         print('ERROR: {} does not contain a {}'.format(
                 basedir, conf_file))
         sys.exit(1)
-    dirs = get_dirs(basedir)
+    conf = get_config(basedir, conf_file)
+    dirs = get_dirs(basedir, conf)
     ensure_dirs(dirs)
     sys.path.insert(0, dirs['python'])
     global autoload
@@ -89,7 +90,6 @@ def main(basedir=None, quick=False):
         from wmk_autoload import autoload
     except:
         pass
-    conf = get_config(basedir, conf_file)
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
@@ -191,14 +191,19 @@ def get_assets_map(conf, datadir):
     return {}
 
 
-def get_dirs(basedir):
+def get_dirs(basedir, conf):
     """
     Configuration of subdirectory names relative to the basedir.
     """
+    # For those who prefer 'site' or 'public' to 'htdocs' -- or perhaps
+    # in order to distinguish production and development setups.
+    output_dir = conf.get('output_directory', 'htdocs')
+    output_dir = re.sub(r'^[\.\/]+', '', output_dir)
     return {
+        'base': basedir,
         'templates': basedir + '/templates', # Mako templates
         'content': basedir + '/content',  # Markdown files
-        'output': basedir + '/htdocs',
+        'output': basedir + '/' + output_dir, # normally htdocs/
         'static': basedir + '/static',
         'assets': basedir + '/assets', # only scss for now
         'data': basedir + '/data', # YAML, potentially sqlite

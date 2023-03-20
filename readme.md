@@ -554,6 +554,11 @@ support for the following settings:
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
   (default: 127.0.0.1). Can also be set directly via command line options.
 
+- `output_directory`: Normally the output will be written to the directory
+  `htdocs` inside the basedir, but this can be overridden by setting this
+  configuration variable. The value should be a relative path that does not
+  start with `/` or `.`, e.g. `site` or `public`.
+
 - `mako_imports`: A list of Python statements to add to the top of each
   generated Mako template module file. Generally these are import statements.
 

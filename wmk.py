@@ -27,14 +27,14 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.1.1'
+VERSION = '1.1.2'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
 KNOWN_DATE_KEYS = (
     'date', 'pubdate', 'modified_date', 'expire_date', 'created_date')
 
-CONTENT_EXTENSIONS = {
+DEFAULT_CONTENT_EXTENSIONS = {
     '.md': {}, # just markdown...
     '.mdwn': {},
     '.mdown': {},
@@ -68,7 +68,7 @@ def main(basedir=None, quick=False):
     """
     Builds/copies everything into the output dir (normally htdocs).
     """
-    # `force` mode is now the default and is turned on by setting --quick
+    # `force` mode is now the default and is turned off by setting --quick
     force = not quick
     if basedir is None:
         basedir = os.path.dirname(os.path.realpath(__file__)) or '.'
@@ -97,6 +97,11 @@ def main(basedir=None, quick=False):
         dirs['themes'], conf.get('theme')) if conf.get('theme') else None
     if themedir and not os.path.exists(themedir):
         themedir = None
+    if themedir and not conf.get('ignore_theme_config', False):
+        # Partial merge of theme config with main config file.
+        # NOTE that WMK_CONFIG does not affect theme settings.
+        theme_conf = get_config(themedir, 'wmk_config.yaml')
+        conf_merge(conf, theme_conf)
     if themedir and os.path.exists(os.path.join(themedir, 'static')):
         os.system('rsync -a "%s/" "%s/"' % (
             os.path.join(themedir, 'static'), dirs['output']))
@@ -112,7 +117,9 @@ def main(basedir=None, quick=False):
             pass
     os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # support content bundles (mainly images inside content dir)
-    ext_excludes = ' '.join(['--exclude "*{}"'.format(_) for _ in CONTENT_EXTENSIONS.keys()])
+    content_extensions = get_content_extensions(conf)
+
+    ext_excludes = ' '.join(['--exclude "*{}"'.format(_) for _ in content_extensions.keys()])
     os.system(
         'rsync -a ' + ext_excludes + ' --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
         % (dirs['content'], dirs['output']))
@@ -169,6 +176,41 @@ def main(basedir=None, quick=False):
     process_templates(templates, lookup, template_vars, force)
     # 6) render Markdown/HTML content
     process_markdown_content(content, lookup, conf, force)
+
+
+def conf_merge(primary, secondary):
+    """
+    Merge theme_conf (= secondary) with conf (= primary), which is changed.
+    Values from secondary (and from dicts inside it) are only added to primary
+    if their key is not present beforehand at the same level.
+    """
+    if not secondary:
+        return
+    dictkeys = set([k for k in secondary if isinstance(secondary[k], dict)])
+    for k in secondary:
+        if not k in primary:
+            primary[k] = secondary[k]
+        elif k in dictkeys and isinstance(primary[k], dict):
+            for k2 in secondary[k]:
+                if not k2 in primary[k]:
+                    primary[k][k2] = secondary[k][k2]
+
+
+def get_content_extensions(conf):
+    ce = conf.get('content_extensions', None)
+    if not ce:
+        return DEFAULT_CONTENT_EXTENSIONS
+    if isinstance(ce, dict):
+        return ce
+    elif isinstance(ce, list):
+        ret = {}
+        for it in ce:
+            k = it if it.startswith('.') else '.' + it
+            ret[k] = DEFAULT_CONTENT_EXTENSIONS.get(k, None)
+            if ret[k] is None:
+                ret[k] = {'pandoc': True, 'pandoc_input_format': k[1:]}
+        return ret
+    return DEFAULT_CONTENT_EXTENSIONS
 
 
 def get_assets_map(conf, datadir):
@@ -768,7 +810,8 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     default_template = conf.get('default_template', 'md_base.mhtml')
     default_pretty_path = lambda x: False if x.startswith('index.') else True
     known_ids = set()
-    known_exts = tuple(CONTENT_EXTENSIONS.keys())
+    content_extensions = get_content_extensions(conf)
+    known_exts = tuple(content_extensions.keys())
     extpat = re.compile(r'\.(?:' + '|'.join([_[1:] for _ in known_exts]) + r')$')
     pandoc_meta_exts = ('.org', '.rst', '.tex', '.man', '.rtf',
                         '.xml' '.jats', '.tei', '.docbook')
@@ -781,7 +824,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             source_file = os.path.join(root, fn)
             source_file_short = source_file.replace(ctdir, '', 1)
             ext = re.findall(r'\.\w+$', fn)[0]
-            ext_conf = CONTENT_EXTENSIONS[ext]
+            ext_conf = content_extensions[ext]
             if ext_conf.get('is_binary'):
                 meta, doc = binary_to_markdown(
                     source_file, ext_conf.get('pandoc_binary_format'), datadir[:-5])
@@ -906,7 +949,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             # convert some common datetime strings to datetime objects
             parse_dates(page)
             ext = re.search(r'\.\w+$', source_file).group(0)
-            ext_conf = CONTENT_EXTENSIONS[ext]
+            ext_conf = content_extensions[ext]
             if ext_conf.get('raw', False):
                 page['_is_html'] = True
             if ext_conf.get('pandoc', False):

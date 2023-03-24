@@ -256,7 +256,7 @@ content and output. They will be created if they do not exist:
 ## Input formats
 
 The format of the files in the `content/` directory is determined on the basis
-if their file extension. The following extensions are recognized:
+if their file extension. The following extensions are recognized by default:
 
 - `.md`, `.mdwn`, `.mdown`, `.markdown`, `.gfm`, `.mmd`: Markdown files.  If
   Pandoc is being used, the input formats `.gfm` and `.mmd` will be assumed to
@@ -293,8 +293,12 @@ if their file extension. The following extensions are recognized:
 
 - `.epub`: The EPUB e-book format.
 
-Pandoc is turned on automatically for all non-markdown, non-HTML formats.
-In order to use such content, Pandoc therefore *must* be installed.
+Pandoc is turned on automatically for all non-markdown, non-HTML formats in the
+above list.  In order to use such content, Pandoc therefore *must* be installed.
+
+The list of input formats and how they are handled is configurable through the
+`content_extensions` setting in the config file.
+See the "Configuration file" section below for details.
 
 **Note:** The three formats JATS, DocBook and TEI are all XML-based. Files in
 all three formats would therefore often use the generic `.xml` extension.
@@ -314,6 +318,8 @@ is limited to specific standard keys such as `title`, `author` and `date`.
 Note that although other input formats are supported, the *canonical* format is
 still markdown. Unless there is a special reason to do otherwise it is the most
 sensible and efficient choice for websites generated using `wmk`.
+
+
 
 <!-- gotchas "A few gotchas" 50 -->
 
@@ -416,8 +422,12 @@ of how `wmk` operates. The name of the file may be changed by setting the
 environment variable `WMK_CONFIG` which should contain a filename without a
 leading directory path.
 
-The configuration file **must** exist (but may be empty). Currently there is
-support for the following settings:
+The configuration file **must** exist (but may be empty). If it specifies a theme
+and a file named `wmk_config.yaml` (*regardless* of the `WMK_CONFIG` environment
+variable setting) exists in the theme directory, then any settings in that file
+will be merged with the main config – unless `ignore_theme_conf` is true.
+
+Currently there is support for the following settings:
 
 - `template_context`: Default values for the context passed to Mako templates.
   This should be a dict.
@@ -454,7 +464,8 @@ support for the following settings:
 - `pandoc`: Normally [Python-Markdown][pymarkdown] is used for markdown
   processing, but if this boolean setting is true, then Pandoc via
   [Pypandoc][pypandoc] is used by default instead. This can be turned off or on
-  through frontmatter variables as well.
+  through frontmatter variables as well. Another config setting which affects
+  whether Pandoc is used is `content_extensions`, for which see below.
 
 - `pandoc_filters`, `pandoc_options`: Lists of filters and options for Pandoc.
   Has no effect unless `pandoc` is true. May be set or overridden through
@@ -469,7 +480,6 @@ support for the following settings:
   to set `pandoc_input_format` explicitly for them, since they have no variants
   in the relevant sense, and the right format is picked based on the file
   extension. May be set or overridden through frontmatter variables.
-
 
 - `pandoc_output_format`: Output format for Pandoc; has no effect unless
   `pandoc` is true. This should be a HTML variant, i.e. either `html`, `html5`
@@ -569,7 +579,12 @@ support for the following settings:
   stand-alone page, but only if no local template overrides it (i.e. has the
   same relative path). Mako's internal template lookup will similarly first look
   for referenced components in the normal `template` directory before looking in
-  the theme directory.
+  the theme directory. Configuration settings from `wmk_config.yaml` in the
+  theme directory will be used as long as they do not conflict with those
+  in the main config file.
+
+- `ignore_theme_conf`: If set to true in the main configuration file, this tells
+  wmk to ignore any settings in `wmk_config.yaml` in the theme directory.
 
 - `extra_template_dirs`: A list of directories in which to look for Mako
   templates. These are placed after both `$basedir/templates` and theme-provided
@@ -583,6 +598,13 @@ support for the following settings:
   locations. The contents of the YAML file is a list of entries with the keys
   `from` and `to`. The former is a path under `htdocs/` or a list of such paths,
   while `to` is an absolute or relative URL which you are to be redirected to.
+
+- `content_extensions`: Customize which file extensions are handled inside the
+  `content/` directory. May be a list (e.g. `['.md', '.html']`) or a dict. The
+  value for each key in the dict should itself be a dict where the following keys
+  have an effect: `pandoc` (boolean), `pandoc_input_format` (string), `is_binary`
+  (boolean), `raw` (boolean), `pandoc_binary_format` (string). See the value
+  of `DEFAULT_CONTENT_EXTENSIONS` in `wmk.py` for details.
 
 [pymarkdown]: https://python-markdown.github.io/
 [pypandoc]: https://github.com/NicklasTegner/pypandoc
@@ -599,27 +621,29 @@ use in `wmk` involves spawning an external process for each content file being
 converted, it is quite a bit slower than Python-Markdown. Therefore, it is
 only recommended if you really do need it. Often, even if you do, it can be
 turned on for individual pages or site sections rather than for the entire site.
+(Of course, if you are working with non-markdown, non-HTML input content, using
+Pandoc is unavoidable.)
 
-If you decide to use Pandoc for a medium or large site, it is recommended to
-turn the `use_cache` setting on in the configuration file. When doing this,
-be aware that content that is sensitive to changes apart from the content file
-will need to be marked as non-cacheable by adding `no_cache: true` to the
+If you decide to use Pandoc for a medium or large site (or if you have a
+significant amount of non-markdown content), it is recommended to turn the
+`use_cache` setting on in the configuration file. When doing this, be aware that
+content that is sensitive to changes apart from the content file itself will
+need to be marked as non-cacheable by adding `no_cache: true` to the
 frontmatter. If you for instance call the `pagelist()` shortcode in the page,
-you would as a rule want to mark the file in this way.
+you would normally want to mark the file in this way.
 
 The `markdown_extensions` setting will of course not affect `pandoc`, but there
 is one extension which is partially emulated in `wmk`'s Pandoc setup, namely
 [toc](https://python-markdown.github.io/extensions/toc/).
 
 If the `toc` frontmatter variable is true and the string `[TOC]` is
-present on a separate line in a markdown document which is to be processed by
-pandoc, then it will be asked to generate a table of contents which will be
-placed in the indicated location, just like the `toc` extension for
-Python-Markdown does. The `toc_depth` setting (whose default value is 3) is
-respected as well, although only in its integer form and not as a range (such as
-`"2-4"`). Note that currently this only works for markdown documents, not for
-other formats such as Org or RST.
-
+present as a separate line in a document which is to be processed by pandoc,
+then it will be asked to generate a table of contents which will be placed in
+the indicated location, just like the `toc` extension for Python-Markdown does.
+The `toc_depth` setting (whose default value is 3) is respected as well,
+although only in its integer form and not as a range (such as `"2-4"`). This
+applies not only to markdown documents but also to the non-markdown formats
+handled by Pandoc.
 
 <!-- themes "Available themes" 90 -->
 

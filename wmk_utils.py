@@ -581,3 +581,271 @@ class RenderCache:
             # will not have been based on all relevant options
             self.cur.execute(self.SQL_UPD, {'key': self.key, 'val': html})
             self.cur.execute('COMMIT')
+
+
+class NavBase:
+    is_root = False
+    is_section = False
+    is_link = False
+    title = None
+    url = None  # only applicable to links
+    parent = None
+    children = [] # empty for links
+    level = 0
+    next = None  # only applicable to *local* links
+    previous = None  # only applicable to *local* links
+    attr = {} # things like link_target, css_class, css_id...
+
+
+    def nav_item_list(self, items, level=-1):
+        ret = []
+        for it in items:
+            if not isinstance(it, dict):
+                raise ValueError('Bad input; not dict: ' + str(it))
+            # Special case: Section as dict rather than list
+            if 'title' in it and 'children' in it:
+                title = it.pop('title')
+                children = it.pop('children')
+                ret.append(
+                    NavSection(title=title, children=children,
+                               parent=self, level=level+1, attr=it))
+                continue
+            elif len(it) != 1:
+                raise ValueError('Bad input: ' + str(it))
+            for title in it:
+                if isinstance(it[title], list):
+                    ret.append(
+                        NavSection(title=title, children=it[title],
+                                   parent=self, level=level+1))
+                elif isinstance(it[title], str):
+                    ret.append(
+                        NavLink(title=title, url=it[title],
+                                parent=self, level=level+1))
+                elif isinstance(it[title], dict):
+                    # Special case: Link as dict rather than str
+                    ret.append(
+                        NavLink(title=title, url=it[title]['url'],
+                                parent=self, level=level+1, attr=it[title]))
+        return ret
+
+
+class NavItem(NavBase):
+    @property
+    def ancestors(self):
+        ret = []
+        parent = self.parent
+        while parent:
+            ret.append(parent)
+            parent = parent.parent
+        return ret
+
+    @property
+    def siblings(self):
+        parent = self.parent
+        return [c for c in self.parent.children if c != self]
+
+
+class NavLink(NavItem):
+    is_link = True
+    is_homepage = False
+
+    def __init__(self, title, url, parent=None, level=0, attr=None):
+        self.title = title
+        self.url = url
+        self.parent = parent
+        self.level = level
+        if attr:
+            self.attr = attr
+
+    def is_url(self, url, normalize):
+        "The given url is the same as self.url after normalization."
+        return normalize(url) == normalize(self.url)
+
+    def contains_url(self, url, normalize, best=False):
+        """
+        The given url starts with self.url or is identical to it (after
+        normalization). If best is True, self.url must be the best-matching such
+        link in the entire nav (i.e. the longest one).
+        """
+        if best:
+            if not self.contains_url(url, normalize):
+                return False
+            better = [link for link in self.ancestors[-1]._links_in_order()
+                      if link != self
+                         and link.contains_url(url, normalize)
+                         and not link.contains_url(self.url, normalize)]
+            return not better
+        else:
+            return normalize(url).startswith(normalize(self.url))
+
+    def _indented(self):
+        ret = "  " * self.level or ''
+        ret += self.title + ': ' + self.url + "\n"
+        return ret
+
+    @property
+    def is_local(self):
+        if 'is_local' in self.attr:
+            return self.attr['is_local']
+        return not self.url.startswith(('https:', 'http:'))
+
+    def __repr__(self):
+        return 'NavLink %s: %s [level=%d]' % (self.title, self.url, self.level)
+
+
+class NavSection(NavItem):
+    is_section = True
+
+    def __init__(self, title, children, parent=None, level=0, attr=None):
+        self.title = title
+        self.children = self.nav_item_list(children, level=level)
+        self.parent = parent
+        self.level = level
+        if attr:
+            self.attr = attr
+
+    def _indented(self):
+        ret = "  " * self.level or ''
+        ret += self.title + ":\n"
+        for c in self.children:
+            ret += c._indented()
+        return ret
+
+    def _links_in_order(self):
+        links = []
+        for it in self.children:
+            if it.children:
+                sublinks = it._links_in_order()
+                links += sublinks
+            else:
+                links.append(it)
+        return links
+
+    def contains_url(self, url, normalize, best=False):
+        """
+        This section contains a link for which contains_url() is True given
+        the conditions. If best is True, the link must be an immediate child of
+        this section (i.e. not of a subsection).
+        """
+        if best:
+            links = [_ for _ in self.children if isinstance(_, NavLink)]
+        else:
+            links = self._links_in_order()
+        links = [_ for _ in links if _.contains_url(url, normalize, best)]
+        return True if links else False
+
+    def __repr__(self):
+        return 'NavSection %s [level=%d, children=%d]' % (
+            self.title, self.level, len(self.children))
+
+    def __iter__(self):
+        return iter(self.children)
+
+    def __len__(self):
+        return len(self.children)
+
+
+class Nav(NavSection):
+    """
+    A Nav is a root-level NavSection without a title and with the optional extra
+    attribute homepage.
+    """
+    is_root = True
+    level = None
+    homepage = None
+
+    def __init__(self, nav, homepage=None):
+        """
+        Normal YAML for nav looks something like this:
+
+        nav:
+          - Home: 'index.html'
+          - User Guide:
+            - Writing: writing
+            - Styling: styling
+          - Resources:
+            - Community: 'https://example.com/'
+            - Source code: 'https://github.com/example/com/'
+          - About:
+            - License: about/license
+            - History: about/history
+        """
+        if isinstance(nav, dict) and 'nav' in nav:
+            nav = nav['nav']
+        self.children = self.nav_item_list(nav)
+        # Fill out previous/next attributes for local links
+        links = self._links_in_order()
+        local_links = [_ for _ in links if _.is_local]
+        if len(local_links) > 1:
+            for i, link in enumerate(local_links):
+                link.previous = local_links[i-1] if i > 0 else None
+                link.next = local_links[i+1] if i < len(local_links) - 1 else None
+        # Homepage setting
+        if homepage:
+            self.homepage = homepage if isinstance(homepage, NavLink) \
+                else NavLink(homepage['title'], homepage['url'])
+        elif homepage is None and links:
+            found = [_ for _ in links if _.attr.get('is_homepage', False)]
+            self.homepage = found[0] if found else links[0]
+        if self.homepage:
+            # Note that this marks at most one link as the homepage
+            for link in links:
+                if link.url == self.homepage.url:
+                    link.is_homepage = True
+                    break
+
+    def __repr__(self):
+        return ''.join([_._indented() for _ in self.children])
+
+
+class Toc:
+    """
+    Extracts an iterable table of contents from HTML containing headings with id
+    attributes. The attribute item_count counts all toc items, regardless of
+    nesting. Each item has title, url, level and children attributes.
+    """
+    def __init__(self, html):
+        self.items = []
+        raw_items = self._extract_headings(html)
+        self.item_count = len(raw_items)
+        for it in raw_items:
+            if self.items and it.level > self.items[-1].level:
+                self.items[-1].add_child(it)
+            else:
+                self.items.append(it)
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __len__(self):
+        return len(self.items)
+
+    def _extract_headings(self, html):
+        ret = []
+        found = re.findall(
+            r'<[hH]([1-6])[^>]* id="([^"]+)"[^>]*>(.*?)</[hH][1-6]>',
+            html, flags=re.S)
+        for level, url, title in found:
+            # remove possible self-permalinks from header content
+            title = re.sub(r'<a[^>]* href="#' + url + r'"[^>]*>.+?</a>', '', title)
+            ret.append(TocItem(title, '#'+url, int(level)))
+        return ret
+
+
+class TocItem:
+    def __init__(self, title, url, level):
+        self.title = title
+        self.url = url
+        self.level = level
+        self.children = []
+
+    def add_child(self, child):
+        if child.level <= self.level:
+            raise ValueError('A child must have a higher level than a parent')
+        elif child.level == self.level + 1:
+            self.children.append(child)
+        else:
+            cand = self.children[-1]
+            while cand.level < child.level - 1:
+                cand = cand.children[-1]
+            cand.children.append(child)

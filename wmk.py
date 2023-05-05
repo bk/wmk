@@ -9,6 +9,7 @@ import json
 import subprocess
 import hashlib
 import shutil
+import gettext
 
 import sass
 import yaml
@@ -21,13 +22,14 @@ from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template, TemplateLookupException
 from mako.runtime import Undefined
 
-from wmk_utils import slugify, attrdict, MDContentList, RenderCache
+from wmk_utils import (
+    slugify, attrdict, MDContentList, RenderCache, Nav, Toc)
 import wmk_mako_filters as wmf
 
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.1.3'
+VERSION = '1.2.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -140,11 +142,23 @@ def main(basedir=None, quick=False):
     }
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
+    template_vars['nav'] = Nav(conf.get('nav', []))
+    # A directory which contains $LANG/LC_MESSAGES/wmk.mo
+    localedir = os.path.join(template_vars['DATADIR'], 'locales')
+    if themedir and not os.path.exists(localedir):
+        theme_locales = os.path.join(themedir, 'data', 'locales')
+        if os.path.exists(theme_locales):
+            localedir = theme_locales
+    gettext.install('wmk', localedir)
+    template_vars['_'] = _  # Traditional 'translate message' shortcut
     # If assets_fingerprinting is off fallback to the 'assets_map' setting
     template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
     # Used as a filter in Mako templates
     template_vars['fingerprint'] = wmf.fingerprint_gen(
             template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
+    # Used as a filter in  Mako templates
+    template_vars['url'] = wmf.url_filter_gen(
+        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
     lookup_dirs = [dirs['templates']]
     if themedir and os.path.exists(os.path.join(themedir, 'templates')):
         lookup_dirs.append(os.path.join(themedir, 'templates'))
@@ -165,6 +179,7 @@ def main(basedir=None, quick=False):
         conf.get('redirects'), template_vars['DATADIR'], template_vars['WEBROOT'])
     # 4) get info about stand-alone templates and Markdown content
     template_vars['site'].build_time = datetime.datetime.now()
+    template_vars['site'].lunr_search = conf.get('lunr_index', False)
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
@@ -320,6 +335,7 @@ def process_markdown_content(content, lookup, conf, force):
         # Since 'pre_render' was dropped, this condition should always be true.
         html = ct['rendered'] if 'rendered' in ct else render_markdown(ct, conf)
         data['CONTENT'] = html
+        data['TOC'] = Toc(html)
         data['RAW_CONTENT'] = ct['doc']
         page = data['page']
         global autoload
@@ -911,10 +927,15 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 page['slug'] = fn_parts[-1][:-3]
             # Ensure that title is present
             if not 'title' in page:
-                page['title'] = fn.split('/')[-1]
-                page['title'] = re.sub(
-                    r'\.(?:md|markdown|mdwn|html?)$', '', page['title'], flags=re.I)
-                page['title'] = re.sub(r'[_ -]', ' ', page['title']).strip() or page['slug']
+                # first try the main heading
+                found = re.search(r'^##? +(.+)', doc.lstrip())
+                if found:
+                    page['title'] = found.group(1)
+                else:
+                    page['title'] = fn.split('/')[-1]
+                    page['title'] = re.sub(
+                        r'\.(?:md|markdown|mdwn|html?)$', '', page['title'], flags=re.I)
+                    page['title'] = re.sub(r'[_ -]', ' ', page['title']).strip() or page['slug']
             # Ensure that id is present...
             if not 'id' in page:
                 page['id'] = slugify(source_file_short[:-3])

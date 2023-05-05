@@ -871,9 +871,9 @@ The following default shortcodes are provided by the `wmk` installation:
   One required argument: `varname`. Optional argument: `default` (which defaults
   to the empty string), indicating what to show if the variable is not available.
 
-<!-- pagevars "Site and page variables" 110 -->
+<!-- pagevars "Site, page and nav variables" 110 -->
 
-## Site and page variables
+## Site, page and nav variables
 
 When a markdown file (or other supported content) is rendered, the Mako template
 receives a number of context variables as partly described above. A few of these
@@ -916,6 +916,47 @@ variable named `foo`, then a template could contain a fragment such as
 named `bar`. Without this syntactic sugar you would have to write something much
 more defensive and long-winded such as  `${ page.foo.bar if page.foo and 'bar'
 in page.foo else 'splat' }`.
+
+### The `nav` variable
+
+The `nav` key in the `wmk_config.yaml` file, if present, will be treated as
+a navigation tree for the site and represented as a tree-like `Nav` object.
+
+A typical nav setting looks something like this:
+
+```yaml
+nav:
+    - Home: 'index.html'
+    - User Guide:
+        - Lorem:
+            - Ipsum: guide/ipsum/
+            - Eu fuit: guide/mageisse/
+        - Dolor sit amet: guide/concupescit/
+    - Resources:
+        - Community: 'https://example.com/'
+        - Source code: 'https://github.com/example/com/'
+    - About:
+        - License: about/license/
+        - History: about/history/
+```
+
+In templates, this will be available as the `nav` variable.
+
+There are two types of entries in the nav: links and sections. A link is just a
+title and an URL (in the above example one may surmise that the URLs will be
+filtered using the `url` template filter). A section is a list of links or
+(possibly nested) sections with a title.
+
+Each item has a `parent` (with the `nav` itself as the top level parent) and a
+`level` (starting from 0 for the immediate children of the `nav`).
+The `nav` has a `homepage` attribute which by default is the first local link in
+the nav. Each local link has `previous` and `next` attributes. Each section has
+`children`. There are other attributes but these are the basics.
+
+The `nav` variable is relatively new (as of version 1.2.x, May 2023) and not
+really supported by themes yet. It is especially intended for sites with a
+hierarchical structure but neither very many pages nor deeply nested, such as a
+typical documentation site.
 
 ### System variables
 
@@ -1040,6 +1081,9 @@ Site variables are the keys-value pairs under `site:` in `wmk_config.yaml`.
 - `site.build_time`: This is automatically added to the site variable by `wmk`.
   It is a datetime object indicating when the rendering phase of the current
   run started.
+
+- `site.lunr_search`: A boolean automatically added to the site variable.
+  It is true when `lunr_index` is true in the configuration file.
 
 Templates or themes may be configurable through various site variables, e.g.
 `site.paginate` for number of items per page in listings or `site.mainfont` for
@@ -1211,8 +1255,17 @@ Mako, the following filters are by default made available in templates:
 
 - `cleanurl`: Remove trailing 'index.html' from URLs.
 
+- `url`: Unless the given path already starts with '/', '.' or 'http',
+  prefix it with the first defined leading path of `site.leading_path`,
+  `site.base_url` or a literal `/`. Postfix a `/` unless the path already has
+  one or seems to end with a file extension. Calls `cleanurl` on the result.
+
+- `to_json`: converts the given data structure to JSON. Note that this should
+  not normally be used as a string filter (i.e. `${ value | to_json }`)
+  but directly as a function, like this: `${ to_json(value) }`.
+
 - `fingerprint`: Replace an unadorned path to an assets file with its
-  fingerprinted (i.e. versioned) equivalent. Example: `${ '/js/site.js' | fingerprint }`.
+  fingerprinted (i.e. versioned) equivalent. Example: `${ 'js/site.js' | url, fingerprint }`.
   Uses the corresponding entry from the `ASSETS_MAP` context variable if it is
   available but otherwise proceeds to do the fingerprinting itself.
 

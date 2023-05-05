@@ -4,6 +4,7 @@ import re
 import os
 import hashlib
 import shutil
+import json
 from email.utils import formatdate  # rfc822
 
 import markdown
@@ -26,6 +27,7 @@ __all__ = [
     'p_unwrap',
     'strip_html',
     'cleanurl',
+    'to_json',
 ]
 
 
@@ -240,6 +242,10 @@ def strip_html(s):
     return ret.strip()
 
 
+def to_json(d):
+    return json.dumps(d)
+
+
 def cleanurl(s):
     """
     Change /path/index.html to /path/.
@@ -247,6 +253,29 @@ def cleanurl(s):
     if s.endswith('/index.html'):
         return s[:-10]
     return s
+
+
+def url_filter_gen(base_path):
+    """
+    Returns a simple local url filter which will be named 'url' in the Mako
+    environment and which prefixes URLs that do not start with '/'.  with the
+    leading path to the root of the wmk site. The default is merely to prefix
+    '/' to the given path (and suffix '/' if it is deemed necessary).
+    Relative urls such as '../this/' are not modified.  If site.leading_path or
+    site.base_url are defined, they will be used instead of '/', in that order.
+    """
+    if not base_path:
+        base_path = '/'
+    if not base_path.endswith('/'):
+        base_path += '/'
+    def url(s):
+        if s.startswith(('/', '.', 'https:', 'http:')):
+            return cleanurl(s)
+        maybe_slash = '/'
+        if s.endswith('/') or '#' in s or '?' in s or re.search(r'\.\w{1,5}$', s):
+            maybe_slash = ''
+        return cleanurl(base_path + s + maybe_slash)
+    return url
 
 
 def fingerprint_gen(webroot=None, assets_map=None):

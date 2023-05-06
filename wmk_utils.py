@@ -827,7 +827,7 @@ class Toc:
             html, flags=re.S)
         for level, url, title in found:
             # remove possible self-permalinks from header content
-            title = re.sub(r'<a[^>]* href="#' + url + r'"[^>]*>.+?</a>', '', title)
+            title = re.sub(r'<a[^>]* href="#[^"]+"[^>]*>.+?</a>', '', title)
             ret.append(TocItem(title, '#'+url, int(level)))
         return ret
 

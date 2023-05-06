@@ -335,7 +335,6 @@ def process_markdown_content(content, lookup, conf, force):
         # Since 'pre_render' was dropped, this condition should always be true.
         html = ct['rendered'] if 'rendered' in ct else render_markdown(ct, conf)
         data['CONTENT'] = html
-        data['TOC'] = Toc(html)
         data['RAW_CONTENT'] = ct['doc']
         page = data['page']
         global autoload
@@ -367,6 +366,7 @@ def process_markdown_content(content, lookup, conf, force):
             page._CACHER(html)
             ct['rendered'] = html
             data['CONTENT'] = html
+        data['TOC'] = Toc(html)
         html_output = ''
         try:
             html_output = template.render(**data)
@@ -492,8 +492,10 @@ def render_markdown(ct, conf):
     if is_html:
         ret = doc
     elif is_pandoc:
-        # For TOC to be added, page.toc must be True and the
-        # markdown content must have a '[TOC]' line
+        # For TOC to be added inline, page.toc must be True and the
+        # markdown content must have a '[TOC]' line.
+        # Note that this is different from the Toc object available
+        # in the template context as the TOC variable.
         need_toc = (
             pg.get('toc', False)
             and re.search(r'^\[TOC\]$', doc, flags=re.M))

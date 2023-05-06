@@ -269,9 +269,9 @@ def url_filter_gen(base_path):
     if not base_path.endswith('/'):
         base_path += '/'
     def url(s):
-        if s.startswith(('/', '.', 'https:', 'http:')):
+        if s != '/' and s.startswith(('/', '.', 'https:', 'http:')):
             return cleanurl(s)
-        maybe_slash = '/'
+        maybe_slash = '' if s in ('/', '') else '/'
         if s.endswith('/') or '#' in s or '?' in s or re.search(r'\.\w{1,5}$', s):
             maybe_slash = ''
         return cleanurl(base_path + s + maybe_slash)

@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.2.1'
+VERSION = '1.2.2'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -149,8 +149,27 @@ def main(basedir=None, quick=False):
         theme_locales = os.path.join(themedir, 'data', 'locales')
         if os.path.exists(theme_locales):
             localedir = theme_locales
-    gettext.install('wmk', localedir)
-    template_vars['_'] = _  # Traditional 'translate message' shortcut
+    if not os.path.exists(localedir):
+        localedir = None
+    if localedir and template_vars['site'].lang:
+        langs = template_vars['site'].lang
+        if isinstance(langs, str):
+            langs = [langs]
+        try:
+            lang = gettext.translation('wmk', localedir=localedir, languages=langs)
+            # Make traditional 'translate message' _ shortcut available globally,
+            # including in templates:
+            lang.install()
+        except FileNotFoundError:
+            # Rather than fall back to system locale, don't use translations at all
+            # in this case. But we still need the _ shortcut...
+            print("WARNING: Translations for locale (site.lang) '{}' not found".format(
+                template_vars['site'].lang))
+            gettext.install('wmk')
+    else:
+        # No localization available; nevertheless install the _ shortcut into
+        # the global environment for compatibility with templates that use it.
+        gettext.install('wmk')
     # If assets_fingerprinting is off fallback to the 'assets_map' setting
     template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
     # Used as a filter in Mako templates

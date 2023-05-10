@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.2.2'
+VERSION = '1.2.3'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -553,7 +553,8 @@ def render_markdown(ct, conf):
             #       POSTPROCESS, notably linkto and pagelist.
             pandoc_extra_formats(
                 pd_doc, pandoc_input,
-                pdformats, pdformats_conf, ct['data']['WEBROOT'])
+                pdformats, pdformats_conf,
+                ct['data']['WEBROOT'], ct['source_file_short'])
     else:
         ret = markdown.markdown(
             doc, extensions=extensions, extension_configs=extension_configs)
@@ -565,7 +566,8 @@ def render_markdown(ct, conf):
     return ret
 
 
-def pandoc_extra_formats(doc, pandoc_input, pdformats, pdformats_conf, webroot):
+def pandoc_extra_formats(
+        doc, pandoc_input, pdformats, pdformats_conf, webroot, sourcefile):
     """
     Writes extra pandoc output formats (pdf, docx, ...) to the files specified
     in `pdformats` with the optional configuration (extra_args, filters) specified
@@ -578,6 +580,15 @@ def pandoc_extra_formats(doc, pandoc_input, pdformats, pdformats_conf, webroot):
         extra_args = cnf.get('extra_args', ())
         filters = cnf.get('filters', ())
         out_fn = pdformats[fmt].strip('/')
+        # Fall back to using the same base filename as that of the sourcefile
+        if out_fn.lower() == 'auto' and re.search(r'\.\w+$', sourcefile):
+            out_fn = re.sub(r'\.\w+$', '.'+ fmt, sourcefile.strip('/'))
+        elif out_fn.lower() == 'auto':
+            out_fn = None
+        if not out_fn or not re.search(r'\.\w+$', out_fn):
+            print("WARNING [%s]:  no valid output file name for extra format %s"
+                  % (sourcefile, fmt))
+            continue
         outputfile = os.path.join(webroot, out_fn)
         maybe_mkdir(outputfile)
         pypandoc.convert_text(
@@ -984,6 +995,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             data['SELF_URL'] = '' if page.get('do_not_render') \
                 else target_fn.replace(outputdir, '', 1)
             data['SELF_FULL_PATH'] = source_file
+            data['SELF_SHORT_PATH'] = source_file_short
             data['SELF_TEMPLATE'] = template
             data['MTIME'] = datetime.datetime.fromtimestamp(
                 os.path.getmtime(source_file))

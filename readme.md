@@ -392,7 +392,9 @@ the following context variables:
 
 - `CONTENT`: The rendered HTML produced from the source document.
 - `RAW_CONTENT`: The original source document.
-- `SELF_FULL_PATH`: The full path to the source document file.
+- `SELF_FULL_PATH`: The full filesystem path to the source document file.
+- `SELF_SHORT_PATH`: The path to the source document file relative to the
+  content directory.
 - `MTIME`: A datetime object representing the modification time for the source
   file.
 - `DATE`: A datetime object representing the first found value of `date`,
@@ -492,11 +494,16 @@ Currently there is support for the following settings:
   other formats than HTML, for instance PDF or MS Word (docx).
   `pandoc_extra_formats` is a dict where each key is a format name (e.g.
   `pdf`) and its value is the output filename relative to the web root (e.g.
-  `subdir/myfile.pdf`). `pandoc_extra_formats_settings`, if present, contains
-  any special settings for the conversion in the form of a dict where each key
-  is a format name and its value is either a dict with the keys `extra_args`
-  and/or `filters`, or a list (which then is interpreted as the value of
-  the `extra_args` setting).
+  `subdir/myfile.pdf`). The special value `auto` indicates that the name of the
+  output file should be based on that of the source file but with the file
+  extension replaced by the name of the format. For instance, a source file
+  named `subdir/index.md` (relative to the content directory) maps to an output
+  file named `subdir/index.pdf` (relative to the web root directory) if the
+  output format is `pdf`, and so on. `pandoc_extra_formats_settings`, if
+  present, contains any special settings for the conversion in the form of a
+  dict where each key is a format name and its value is either a dict with the
+  keys `extra_args` and/or `filters`, or a list (which then is interpreted as
+  the value of the `extra_args` setting).
 
 - `use_cache`: boolean, True by default. If you set this to False, the
   rendering cache will be disabled. This is useful for small and medium-sized
@@ -649,7 +656,7 @@ handled by Pandoc.
 
 ## Available themes
 
-Currently there are three wmk themes available:
+Currently there are four wmk themes available:
 
 - [Lanyonesque][lanyonesque], a blog-oriented theme based on the Jekyll theme
   [Lanyon][lanyon]. [Demo][ldemo].
@@ -659,6 +666,8 @@ Currently there are three wmk themes available:
 
 - [Picompany][pcomp], a general-purpose theme based on the [Company][company]
   template that accompanies the [PicoCSS][pico] documentation. [Demo][pdemo].
+
+- [WDocs], a full-featured documentation theme. [Demo][wdemo].
 
 [lanyonesque]: https://github.com/bk/lanyonesque
 [lanyon]: https://github.com/poole/lanyon
@@ -671,6 +680,8 @@ Currently there are three wmk themes available:
 [company]: https://picocss.com/examples/company/
 [pico]: https://picocss.com/
 [pdemo]: https://picompany.baldr.net/
+[WDocs]: https://github.com/bk/wdocs-theme
+[wdemo]: https://wdocs.baldr.net/
 
 <!-- shortcodes "Shortcodes" 100 -->
 
@@ -926,26 +937,25 @@ A typical nav setting looks something like this:
 
 ```yaml
 nav:
-    - Home: 'index.html'
+    - Home: /
     - User Guide:
         - Lorem:
-            - Ipsum: guide/ipsum/
-            - Eu fuit: guide/mageisse/
-        - Dolor sit amet: guide/concupescit/
+            - Ipsum: /guide/ipsum/
+            - Eu fuit: /guide/mageisse/
+        - Dolor sit amet: /guide/concupescit/
     - Resources:
         - Community: 'https://example.com/'
         - Source code: 'https://github.com/example/com/'
     - About:
-        - License: about/license/
-        - History: about/history/
+        - License: /about/license/
+        - History: /about/history/
 ```
 
 In templates, this will be available as the `nav` variable.
 
 There are two types of entries in the nav: links and sections. A link is just a
-title and an URL (in the above example one may surmise that the URLs will be
-filtered using the `url` template filter). A section is a list of links or
-(possibly nested) sections with a title.
+title and an URL. A section has a title and a list of links or sections
+(possibly nested).
 
 Each item has a `parent` (with the `nav` itself as the top level parent) and a
 `level` (starting from 0 for the immediate children of the `nav`).
@@ -957,6 +967,22 @@ The `nav` variable is relatively new (as of version 1.2.x, May 2023) and not
 really supported by themes yet. It is especially intended for sites with a
 hierarchical structure but neither very many pages nor deeply nested, such as a
 typical documentation site.
+
+### The `TOC` variable
+
+When a page is rendered, the generated HTML is examined and a simple table of
+contents object constructed, which will be available to templates as `TOC`. It
+contains a list of the top-level headings (i.e. H1 headings, or H2 headings if
+no H1 headings are present, etc.), with lower-level headings hierarchically
+arranged in its `children`. Other attributes are `url` and `title`.
+`TOC.item_count` contains the heading count (regardless of nesting).
+
+The `TOC` variable can e.g. be used by the page template to show a table of
+contents elsewhere on the page.
+
+The table of contents object is not constructed unless each heading has an `id`
+attribute. When using the default python-markdown, this means that the `toc`
+extension must be active.
 
 ### System variables
 

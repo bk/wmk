@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.2.3'
+VERSION = '1.2.4'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -385,7 +385,11 @@ def process_markdown_content(content, lookup, conf, force):
             page._CACHER(html)
             ct['rendered'] = html
             data['CONTENT'] = html
-        data['TOC'] = Toc(html)
+        try:
+            data['TOC'] = Toc(html)
+        except Exception as e:
+            print("TOC ERROR for %s: %s" % (ct['url'], str(e)))
+            data['TOC'] = Toc('')
         html_output = ''
         try:
             html_output = template.render(**data)

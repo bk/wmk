@@ -13,6 +13,8 @@ BASEDIR="$2"
 QUICK=""
 SERVEPORT=""
 SERVEIP=""
+PREVIEWFILE=""
+ADMIN_SUBDIR="admin"
 CACHE_FILE="$BASEDIR/tmp/wmk_render_cache.$(id -u).db"
 if [ "$WMK_CONFIG" = "" ]; then
     WMK_CONF_PATH="$BASEDIR/wmk_config.yaml"
@@ -28,6 +30,14 @@ if [ "$ACTION" = "--version" ]; then
     "$WMK_HOME/wmk.py" "--version"
     exit
 fi
+if [ "$ACTION" = "preview" ]; then
+    PREVIEWFILE="$3"
+fi
+if [[ "$ACTION" = "preview" && "$3" != "" ]]; then
+    ADMIN_SUBDIR="$3"
+fi
+
+
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -47,6 +57,7 @@ while [[ "$#" -gt 0 ]]; do
             echo "NOTE: -f|--force is no longer needed. Switch ignored."
             shift
             ;;
+
         *)
             shift
             ;;
@@ -79,6 +90,8 @@ usage(){
     echo "  wmk build|watch <dirname> [-q|--quick]"
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk watch-serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
+    echo "  wmk preview <dirname> file-in-content.md"
+    echo "  wmk admin <dirname> [admin-subdir-name]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache <dirname>"
     echo "Action abbreviations: "
@@ -167,6 +180,11 @@ then
         r|b|run|build)
             "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"
             ;;
+        admin)
+            "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"
+            mkdir -p "$BASEDIR/tmp"
+            "$BASEDIR/$ADMIN_SUBDIR/admin.py"
+            ;;
         w|watch)
             cd "$BASEDIR" || exit 1
             if [ "$INOTIFYWAIT" != "" ]; then
@@ -192,6 +210,9 @@ then
             ;;
         ws|watch-serve)
             watch_and_serve
+            ;;
+        preview)
+            "$WMK_HOME/wmk.py" "$BASEDIR" --preview "$PREVIEWFILE"
             ;;
         debug|env|info)
             echo "WMK ENVIRONMENT:"

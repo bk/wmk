@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.2.4'
+VERSION = '1.3.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -210,6 +210,139 @@ def main(basedir=None, quick=False):
     process_templates(templates, lookup, template_vars, force)
     # 6) render Markdown/HTML content
     process_markdown_content(content, lookup, conf, force)
+
+
+def preview_single(basedir, preview_file, preview_content=None, with_metadata=False):
+    """
+    Returns the bare HTML (i.e. not including HTML from Mako templates other
+    than shortcodes) for a single named file inside the content directory.
+    This is more complicated than it sounds since all settings must be
+    respected and all processing except for the actual output must be
+    done. If `preview_content` is provided, then the file named does not
+    actually need to exist (although a filename does need to be provided).
+
+    Note that the POSTPROCESS will not be performed. This includes shortcodes
+    relying on that, such as `linkto` and `pagelist`; only placeholders for them
+    will be visible in the output. The `resize_image` will actually output
+    resized images to the htdocs directory, unless they already are present.
+    """
+    # `force` mode is now the default and is turned off by setting --quick
+    force = True
+    basedir = os.path.realpath(basedir)
+    if not os.path.isdir(basedir):
+        raise Exception('{} is not a directory'.format(basedir))
+    conf_file = re.sub(
+        r'.*/', '', os.environ.get('WMK_CONFIG', '')) or 'wmk_config.yaml'
+    if not os.path.exists(os.path.join(basedir, conf_file)):
+        print('ERROR: {} does not contain a {}'.format(
+                basedir, conf_file))
+        sys.exit(1)
+    conf = get_config(basedir, conf_file)
+    dirs = get_dirs(basedir, conf)
+    sys.path.insert(0, dirs['python'])
+    global autoload
+    try:
+        from wmk_autoload import autoload
+    except:
+        pass
+    # The content may use shortcodes, so we do need this
+    themedir = os.path.join(
+        dirs['themes'], conf.get('theme')) if conf.get('theme') else None
+    if themedir and not os.path.exists(themedir):
+        themedir = None
+    if themedir and not conf.get('ignore_theme_config', False):
+        # Partial merge of theme config with main config file.
+        # NOTE that WMK_CONFIG does not affect theme settings.
+        theme_conf = get_config(themedir, 'wmk_config.yaml')
+        conf_merge(conf, theme_conf)
+    if themedir and os.path.exists(os.path.join(themedir, 'py')):
+        sys.path.insert(1, os.path.join(themedir, 'py'))
+        try:
+            from wmk_theme_autoload import autoload as theme_autoload
+            for k in theme_autoload:
+                if k in autoload:
+                    continue
+                autoload[k] = theme_autoload[k]
+        except:
+            pass
+    # support content bundles (mainly images inside content dir)
+    content_extensions = get_content_extensions(conf)
+
+    # Global data for template rendering, used by both process_templates
+    # and process_markdown_content.
+    template_vars = {
+        'DATADIR': os.path.realpath(dirs['data']),
+        'CONTENTDIR': os.path.realpath(dirs['content']),
+        'WEBROOT': os.path.realpath(dirs['output']),
+        'TEMPLATES': [],
+        'MDCONTENT': MDContentList([]),
+    }
+    template_vars.update(conf.get('template_context', {}))
+    template_vars['site'] = attrdict(conf.get('site', {}))
+    template_vars['nav'] = Nav(conf.get('nav', []))
+    # Shortcodes may use locales, so we do need them for the preview.
+    # A directory which contains $LANG/LC_MESSAGES/wmk.mo
+    localedir = os.path.join(template_vars['DATADIR'], 'locales')
+    if themedir and not os.path.exists(localedir):
+        theme_locales = os.path.join(themedir, 'data', 'locales')
+        if os.path.exists(theme_locales):
+            localedir = theme_locales
+    if not os.path.exists(localedir):
+        localedir = None
+    if localedir and template_vars['site'].lang:
+        langs = template_vars['site'].lang
+        if isinstance(langs, str):
+            langs = [langs]
+        try:
+            lang = gettext.translation('wmk', localedir=localedir, languages=langs)
+            # Make traditional 'translate message' _ shortcut available globally,
+            # including in templates:
+            lang.install()
+        except FileNotFoundError:
+            # Rather than fall back to system locale, don't use translations at all
+            # in this case. But we still need the _ shortcut...
+            print("WARNING: Translations for locale (site.lang) '{}' not found".format(
+                template_vars['site'].lang))
+            gettext.install('wmk')
+    else:
+        # No localization available; nevertheless install the _ shortcut into
+        # the global environment for compatibility with templates that use it.
+        gettext.install('wmk')
+    # If assets_fingerprinting is off fallback to the 'assets_map' setting
+    template_vars['ASSETS_MAP'] = {}
+    # Used as a filter in Mako templates
+    template_vars['fingerprint'] = wmf.fingerprint_gen(
+            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
+    # Used as a filter in  Mako templates
+    template_vars['url'] = wmf.url_filter_gen(
+        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
+    lookup_dirs = [dirs['templates']]
+    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
+        lookup_dirs.append(os.path.join(themedir, 'templates'))
+    if conf.get('extra_template_dirs', None):
+        lookup_dirs += conf['extra_template_dirs']
+    # Add wmk_home templates for "built-in" shortcodes
+    wmk_home = os.path.dirname(os.path.realpath(__file__))
+    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
+    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
+    if conf.get('mako_imports', None):
+        mako_imports += conf.get('mako_imports')
+    lookup = TemplateLookup(
+        directories=lookup_dirs,
+        imports=mako_imports)
+    conf['_lookup'] = lookup
+    # 4) get info about stand-alone templates and Markdown content
+    template_vars['site'].build_time = datetime.datetime.now()
+    template_vars['site'].lunr_search = conf.get('lunr_index', False)
+    templates = get_templates(
+        dirs['templates'], themedir, dirs['output'], template_vars)
+    index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
+    conf['_index_yaml_data'] = index_yaml or {}
+    content = get_content(
+        dirs['content'], dirs['data'], dirs['output'],
+        template_vars, conf, force,
+        previewing=preview_file, preview_content=preview_content)
+    return content if with_metadata else content['rendered']
 
 
 def conf_merge(primary, secondary):
@@ -854,7 +987,8 @@ def maybe_extra_meta(meta, fn):
     return meta
 
 
-def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
+def get_content(ctdir, datadir, outputdir, template_vars, conf,
+                force=False, previewing=None, preview_content=None):
     """
     Get those markdown files that need processing.
     """
@@ -867,7 +1001,12 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
     extpat = re.compile(r'\.(?:' + '|'.join([_[1:] for _ in known_exts]) + r')$')
     pandoc_meta_exts = ('.org', '.rst', '.tex', '.man', '.rtf',
                         '.xml' '.jats', '.tei', '.docbook')
-    for root, dirs, files in os.walk(ctdir):
+    preview_target = os.path.join(ctdir, previewing) if previewing else None
+    if previewing:
+        files_to_process = [(ctdir, [], [previewing])]
+    else:
+        files_to_process = [_ for _ in os.walk(ctdir)]
+    for root, dirs, files in files_to_process:
         for fn in files:
             if not fn.endswith(known_exts):
                 continue
@@ -883,6 +1022,10 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 for k in ext_conf:
                     if not k in meta:
                         meta[k] = ext_conf[k]
+            elif previewing and preview_content:
+                meta, doc = frontmatter.parse(preview_content)
+                meta = maybe_extra_meta(meta, source_file)
+                # TODO: handle possible pandoc metadata for non-Markdown formats?
             else:
                 with open(source_file) as f:
                     try:
@@ -1001,8 +1144,11 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
             data['SELF_FULL_PATH'] = source_file
             data['SELF_SHORT_PATH'] = source_file_short
             data['SELF_TEMPLATE'] = template
-            data['MTIME'] = datetime.datetime.fromtimestamp(
-                os.path.getmtime(source_file))
+            if previewing:
+                data['MTIME'] = datetime.datetime.now()
+            else:
+                data['MTIME'] = datetime.datetime.fromtimestamp(
+                    os.path.getmtime(source_file))
             data['RENDERER'] = lambda x: render_markdown(x, conf)
             # convert some common datetime strings to datetime objects
             parse_dates(page)
@@ -1026,8 +1172,11 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, force=False):
                 'url': data['SELF_URL'],
             })
             content[-1]['rendered'] = render_markdown(content[-1], conf)
+    if previewing:
+        return content[0]
     content = MDContentList(content)
     template_vars['MDCONTENT'] = content
+    maybe_save_mdcontent_as_json(content, conf, os.path.split(ctdir)[0])
     for it in content:
         it['data']['MDCONTENT'] = content
     if conf.get('lunr_index', False):
@@ -1231,6 +1380,24 @@ def mako_shortcode(conf, ctx, nth=None):
     return replacer
 
 
+def maybe_save_mdcontent_as_json(content, conf, basedir):
+    full_dump = conf.get('mdcontent_json', None)
+    if full_dump and full_dump.endswith('.json'):
+        # Make sure the file ends up inside the base directory
+        while full_dump.startswith(('.', '/')):
+            full_dump = full_dump.strip('/')
+            full_dump = full_dump.strip('.')
+        # ... and inside one of the three allowed subdirectories (data by default)
+        if not full_dump.startswith(('data/', 'tmp/', 'htdocs/')):
+            full_dump = os.path.join('data', full_dump)
+        full_dump = os.path.join(basedir, full_dump)
+        # NOTE: destination directory must exist
+        with open(full_dump, 'w') as f:
+            f.write(json.dumps(content, indent=2, sort_keys=True, default=str))
+    elif full_dump:
+        print("WARNING: Invalid config value for mdcontent_json: '%s'" % full_dump)
+
+
 def build_lunr_index(content, index_fields, langs=None):
     """
     Builds a search index compatible with lunr.js and writes it as '/idx.json'.
@@ -1316,4 +1483,8 @@ if __name__ == '__main__':
         sys.exit()
     basedir = sys.argv[1] if len(sys.argv) > 1 else None
     quick = True if len(sys.argv) > 2 and sys.argv[2] in ('-q', '--quick') else False
-    main(basedir, quick)
+    preview = sys.argv[3] if len(sys.argv) > 3 and sys.argv[2] == '--preview' else None
+    if preview:
+        print(preview_single(basedir, preview))
+    else:
+        main(basedir, quick)

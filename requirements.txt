@@ -1,4 +1,5 @@
-certifi==2022.12.7
+bottle==0.12.25
+certifi==2023.5.7
 charset-normalizer==3.1.0
 idna==3.4
 importlib-metadata==6.3.0
@@ -8,6 +9,7 @@ Mako==1.2.4
 Markdown==3.4.3
 MarkupSafe==2.1.2
 Pillow==9.5.0
+pymdown-extensions==9.11
 pypandoc==1.11
 python-frontmatter==1.0.0
 PyYAML==6.0

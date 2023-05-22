@@ -181,9 +181,14 @@ then
             "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"
             ;;
         admin)
-            "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"
-            mkdir -p "$BASEDIR/tmp"
-            "$BASEDIR/$ADMIN_SUBDIR/admin.py"
+            if [[ -e "$BASEDIR/$ADMIN_SUBDIR/admin.py" ]]; then
+                "$WMK_HOME/wmk.py" "$BASEDIR" "$QUICK"
+                mkdir -p "$BASEDIR/tmp"
+                "$BASEDIR/$ADMIN_SUBDIR/admin.py"
+            else
+                echo "ERROR: no admin installed at '$BASEDIR/$ADMIN_SUBDIR'"
+                exit 1
+            fi
             ;;
         w|watch)
             cd "$BASEDIR" || exit 1

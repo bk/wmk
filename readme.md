@@ -171,6 +171,20 @@ see the "File organization" section below).
   `wmk_config.yaml` by setting `use_cache` to `false`, or on file-by-file basis
   via a frontmatter setting (`no_cache`). A synonym for `clear-cache` is `c`.
 
+- `wmk preview $basedir $filename` where `$filename` is the name of a file relative
+  to the `content` subdirectory of `$basedir`. This prints (to stdout) the HTML
+  which the given file will be converted to (before it is passed to the Mako
+  template and before potential post-processing). Example: `wmk preview .
+  index.md`.
+
+- `wmk admin $basedir`: Build the site and then start [wmkAdmin](https://github.com/bk/wmk-admin/),
+  which must have been installed beforehand into the `admin` subdirectory of the
+  `$basedir` (or into the subdirectory specified with `wmk admin $basedir $subdir`).
+  The subdirectory may be a symbolic link pointing to a central instance.
+  wmkAdmin allows you to manage the content of the site via a web interface. It
+  is not designed to allow you to alter the Mako templates, install themes or
+  perform other tasks that require more technical knowledge.
+
 <!-- organization "File organization" 40 -->
 
 ## File organization
@@ -612,6 +626,12 @@ Currently there is support for the following settings:
   have an effect: `pandoc` (boolean), `pandoc_input_format` (string), `is_binary`
   (boolean), `raw` (boolean), `pandoc_binary_format` (string). See the value
   of `DEFAULT_CONTENT_EXTENSIONS` in `wmk.py` for details.
+
+- `mdcontent_json`: This option may specify the name of a JSON file to which
+  to write the entire `MDCONTENT` object in serialized form, along with the
+  environment variables for each page. The destination file may be either in
+  `htdocs/`, `data/` or `tmp/`. If the file path does not start with one of
+  these, `data` is assumed. The specified (or implied) directory must exist.
 
 [pymarkdown]: https://python-markdown.github.io/
 [pypandoc]: https://github.com/NicklasTegner/pypandoc

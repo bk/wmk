@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.3.0'
+VERSION = '1.3.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -86,7 +86,8 @@ def main(basedir=None, quick=False):
     conf = get_config(basedir, conf_file)
     dirs = get_dirs(basedir, conf)
     ensure_dirs(dirs)
-    sys.path.insert(0, dirs['python'])
+    if not dirs['python'] in sys.path:
+        sys.path.insert(0, dirs['python'])
     global autoload
     try:
         from wmk_autoload import autoload
@@ -108,7 +109,9 @@ def main(basedir=None, quick=False):
         os.system('rsync -a "%s/" "%s/"' % (
             os.path.join(themedir, 'static'), dirs['output']))
     if themedir and os.path.exists(os.path.join(themedir, 'py')):
-        sys.path.insert(1, os.path.join(themedir, 'py'))
+        theme_py = os.path.join(themedir, 'py')
+        if not theme_py in sys.path:
+            sys.path.insert(1, os.path.join(themedir, 'py'))
         try:
             from wmk_theme_autoload import autoload as theme_autoload
             for k in theme_autoload:
@@ -239,7 +242,8 @@ def preview_single(basedir, preview_file, preview_content=None, with_metadata=Fa
         sys.exit(1)
     conf = get_config(basedir, conf_file)
     dirs = get_dirs(basedir, conf)
-    sys.path.insert(0, dirs['python'])
+    if not dirs['python'] in sys.path:
+        sys.path.insert(0, dirs['python'])
     global autoload
     try:
         from wmk_autoload import autoload
@@ -256,7 +260,9 @@ def preview_single(basedir, preview_file, preview_content=None, with_metadata=Fa
         theme_conf = get_config(themedir, 'wmk_config.yaml')
         conf_merge(conf, theme_conf)
     if themedir and os.path.exists(os.path.join(themedir, 'py')):
-        sys.path.insert(1, os.path.join(themedir, 'py'))
+        theme_py = os.path.join(themedir, 'py')
+        if not theme_py in sys.path:
+            sys.path.insert(1, theme_py)
         try:
             from wmk_theme_autoload import autoload as theme_autoload
             for k in theme_autoload:

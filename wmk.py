@@ -9,6 +9,7 @@ import json
 import subprocess
 import hashlib
 import shutil
+import locale
 import gettext
 
 import sass
@@ -29,13 +30,15 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.3.1'
+VERSION = '1.4.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
 KNOWN_DATE_KEYS = (
     'date', 'pubdate', 'modified_date', 'expire_date', 'created_date')
 
+# Note that only markdown/html extensions will be active unless explicitly
+# set in wmk_config (or pandoc is globally true).
 DEFAULT_CONTENT_EXTENSIONS = {
     '.md': {}, # just markdown...
     '.mdwn': {},
@@ -146,6 +149,10 @@ def main(basedir=None, quick=False):
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
     template_vars['nav'] = Nav(conf.get('nav', []))
+    # site.locale affects collation; site.lang affects translations
+    if template_vars['site'].locale:
+        print("NOTE: Setting collation locale to", template_vars['site'].locale)
+        locale.setlocale(locale.LC_COLLATE, template_vars['site'].locale)
     # A directory which contains $LANG/LC_MESSAGES/wmk.mo
     localedir = os.path.join(template_vars['DATADIR'], 'locales')
     if themedir and not os.path.exists(localedir):
@@ -371,8 +378,10 @@ def conf_merge(primary, secondary):
 
 def get_content_extensions(conf):
     ce = conf.get('content_extensions', None)
-    if not ce:
-        return DEFAULT_CONTENT_EXTENSIONS
+    if ce is None and not conf.get('pandoc'):
+        # If pandoc is True in the global config, we support all known content
+        # extensions by default. Otherwise, we only support markdown and html.
+        ce = ['.md', '.mdwn', '.mdown', '.markdown', '.gfm', '.mmd' '.htm', '.html']
     if isinstance(ce, dict):
         return ce
     elif isinstance(ce, list):
@@ -383,6 +392,7 @@ def get_content_extensions(conf):
             if ret[k] is None:
                 ret[k] = {'pandoc': True, 'pandoc_input_format': k[1:]}
         return ret
+    # Should only get here if pandoc is globally true
     return DEFAULT_CONTENT_EXTENSIONS
 
 
@@ -622,6 +632,22 @@ def render_markdown(ct, conf):
         ret = None
         cache = None
     nth = {}
+    ## Note that PREPROCESS is now run before shortcodes are interpreted, so
+    ## such actions cannot be added by them. PREPROCESS actions may for instance
+    ## handle syntactic sugar that transforms into shortcodes behind the scenes.
+    if pg.PREPROCESS:
+        global autoload
+        pg.is_pandoc = is_pandoc
+        for pp in pg.PREPROCESS:
+            if isinstance(pp, str):
+                if autoload and pp in autoload:
+                    doc = autoload[pp](doc, pg)
+                else:
+                    print("WARNING: Preprocessor '%s' not present for %s"
+                          % (pp, ct['source_file_short']))
+            else:
+                doc = pp(doc, pg)
+    # POSTPROCESS, on the other hand may be added by shortcodes (and often is)
     if '{{<' in doc:
         # Mako shortcodes
         # We need to handle include() first.
@@ -637,20 +663,6 @@ def render_markdown(ct, conf):
         while found:
             doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
-    ## May be added as a callable by shortcodes, or as a string pointing to an
-    ## entry in autoload
-    if pg.PREPROCESS:
-        global autoload
-        pg.is_pandoc = is_pandoc
-        for pp in pg.PREPROCESS:
-            if isinstance(pp, str):
-                if autoload and pp in autoload:
-                    doc = autoload[pp](doc, pg)
-                else:
-                    print("WARNING: Preprocessor '%s' not present for %s"
-                          % (pp, ct['source_file_short']))
-            else:
-                doc = pp(doc, pg)
     if is_html:
         ret = doc
     elif is_pandoc:
@@ -1103,9 +1115,10 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
             if 'slug' in page and re.match(r'^[a-z0-9_-]+$', page['slug']):
                 fn = re.sub(r'[^/]+\.(md|html)$', (page['slug']+r'.\1'), fn)
             # Ensure that the destination file/dir only contains a limited
-            # set of characters
+            # set of characters -- unless slugify_dirs is False
+            slugify_dirs = page.get('slugify_dirs', True)
             fn_parts = fn.split('/')
-            if re.search(r'[^A-Za-z0-9_.,=-]', fn_parts[-1]):
+            if re.search(r'[^A-Za-z0-9_.,=-]', fn_parts[-1]) and slugify_dirs:
                 fn_parts[-1] = slugify(fn_parts[-1])
             # Ensure that slug is present
             if not 'slug' in page:

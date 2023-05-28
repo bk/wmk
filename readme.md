@@ -221,7 +221,7 @@ content and output. They will be created if they do not exist:
     the same filename as the content file, but with an extra `.yaml` extension
     added; or (c) it may be in `index.yaml` files which are inherited by
     subdirectories and the files contained in them.
-    For details, see the "Site and page variables" section below.
+    For details, see the "Site, page and nav variables" section below.
   - The target filename will be `index.html` in a directory corresponding to the
     basename of the source file – unless `pretty_path` in the metadata is `false`
     or the name of the file itself is `index.md` or `index.html` (in which case
@@ -252,14 +252,14 @@ content and output. They will be created if they do not exist:
   actions by name (i.e. keys in the `autoload` dict) rather than as function
   references, which in turn makes it possible to specify them in the frontmatter
   directly rather than having to do it via a shortcode. (For more on `PRE-` and
-  `POSTPROCESS`, see the "Site and page variables" section).
+  `POSTPROCESS`, see the "Site, page and nav variables" section).
 
 - `assets`: Assets for an asset pipeline. The only default handling of assets
   involves compiling SCSS/Sass files in the subdirectory `scss`. They will be
   compiled to CSS which is placed in the target directory `htdocs/css`. Other
   assets handling can be configured via settings in the configuration file, e.g.
   `assets_commands` and `assets_fingerprinting`. This will be described in more
-  detail in the "Site and page variables" section. Also take note of the
+  detail in the "Site, page and nav variables" section. Also take note of the
   `fingerprint` template filter, described in the "Template filters" section.
 
 - `static`: Static files. Everything in here will be rsynced directoy over to
@@ -427,7 +427,7 @@ the following context variables:
   metadata.
 
 For further details on context variables set in the document frontmatter and in
-`index.yaml` files, see the "Site and page variables" section below.
+`index.yaml` files, see the "Site, page and nav variables" section below.
 
 <!-- config "Configuration file" 70 -->
 
@@ -450,7 +450,7 @@ Currently there is support for the following settings:
 
 - `site`: Values for common information relating to the website. These are also
   added to the template context under the key `site`. Also
-  see the "Site and page variables" section below.
+  see the "Site, page and nav variables" section below.
 
 - `render_drafts`: Normally, content files with `draft` set to a true value in
   the metadata section will be skipped during rendering. This can be turned off
@@ -518,6 +518,12 @@ Currently there is support for the following settings:
   dict where each key is a format name and its value is either a dict with the
   keys `extra_args` and/or `filters`, or a list (which then is interpreted as
   the value of the `extra_args` setting).
+
+- `slugify_dirs`: Affects the names of directories created in `htdocs` because
+  of the `pretty_path` setting. If `true` (which is the default), the name will
+  be identical to the `slug` of the source file. If explicitly set to `false`,
+  then the directory name will be the same as the basename of the source file,
+  almost regardless of the characters in the filename.
 
 - `use_cache`: boolean, True by default. If you set this to False, the
   rendering cache will be disabled. This is useful for small and medium-sized
@@ -747,7 +753,7 @@ of a cached page, after document conversion but right before the Mako layout
 template is called), receiving the full HTML as a first argument followed by the
 rest of the context for the page.  Examples of such shortcodes are `linkto` and
 `pagelist`, described below.  (For more on `page.POSTPROCESS` and
-`page.PREPROCESS`, see the "Site and page variables" section below).
+`page.PREPROCESS`, see the "Site, page and nav variables" section below).
 
 Here is an example of a simple shortcode call in markdown content:
 
@@ -1085,7 +1091,9 @@ files is `md_base.mhtml`.
   instructions in the list are applied to the markdown (or other content
   document) just before converting it to HTML. The function receives two
   arguments: the document text and the `page` object. It should return the
-  altered document.
+  altered document source. Note that this happens before shortcodes have
+  been expanded, so (unlike `page.POSTPROCESS`) such actions cannot be added via
+  shortcode.
 
 Note that if two files in the same directory have the same slug, they may both
 be rendered to the same output file; it is unpredictable which of them will go
@@ -1106,7 +1114,11 @@ Site variables are the keys-value pairs under `site:` in `wmk_config.yaml`.
 
 - `site.title`: Name or title of the site.
 
-- `site.lang`: Language code, e.g. 'en' or 'en-us'.
+- `site.lang`: Language code, e.g. 'en' or 'en-us'. Used e.g. for translations by
+  some themes.
+
+- `site.locale`: Locale code, e.g. 'en_US.utf8'. Used when sorting `MDCONTENT`
+  by name or title.
 
 - `site.tagline`: Subtitle or slogan.
 

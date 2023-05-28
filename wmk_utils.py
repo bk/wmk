@@ -3,6 +3,7 @@ import re
 import unicodedata
 import sqlite3
 import hashlib
+import locale
 
 
 def slugify(s):
@@ -134,7 +135,11 @@ class MDContentList(list):
         return MDContentList([_ for _ in self if pred(_['doc'])])
 
     def sorted_by(self, key, reverse=False, default_val=-1):
-        k = lambda x: x['data']['page'].get(key, default_val)
+        if isinstance(default_val, str):
+            k = lambda x: locale.strxfrm(
+                x['data']['page'].get(key, default_val))
+        else:
+            k = lambda x: x['data']['page'].get(key, default_val)
         return MDContentList(sorted(self, key=k, reverse=reverse))
 
     def sorted_by_date(self, newest_first=True, date_key='DATE'):
@@ -207,9 +212,12 @@ class MDContentList(list):
         if not isinstance(needles, (list, tuple)):
             needles = [needles]
         needles = [_.lower() for _ in needles]
+        is_bool = len(needles) == 1 and isinstance(needles[0], bool) and needles[0]
         def found(x):
             for k in haystack_keys:
                 if k in x:
+                    if is_bool and x[k]:
+                        return True  ## at least one tag/category/etc. is present
                     if isinstance(x[k], (list, tuple)):
                         for _ in x[k]:
                             if not _:
@@ -282,7 +290,7 @@ class MDContentList(list):
         if order == 'count':
             found.sort(key=lambda x: x['count'], reverse=True)
         elif order in ('name', 'slug'):
-            found.sort(key=lambda x: x[order], reverse=False)
+            found.sort(key=lambda x: locale.strxfrm(x[order]), reverse=False)
         return found
 
     def get_categories(self, order='name'):

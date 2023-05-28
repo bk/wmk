@@ -1,5 +1,5 @@
-<%page args="src, figtitle=None, img_link=None, link_target=None, caption=None, alt=None,  credit=None, credit_link=None, width=None, height=None, resize=False" />
-<%! import markdown %>
+<%page args="src, figtitle=None, img_link=None, link_target=None, caption=None, alt=None,  credit=None, credit_link=None, width=None, height=None, resize=False, css_class=None" />
+<%! import markdown, os %>
 <%namespace name="resiz" file="resize_image.mc" />
 <%
 if caption is None:
@@ -13,6 +13,8 @@ if resize:
     resize_kwargs = context.kwargs
     resize_kwargs.update(resize_opt)
     src = capture(lambda: resiz.body(**resize_kwargs))
+if not src.startswith(('/', 'http:', 'https:')):
+    src = os.path.normpath(os.path.join(os.path.dirname(SELF_URL), src))
 %>
 <figure${ ' class="{}"'.format(css_class) if css_class else '' }>
   % if img_link:

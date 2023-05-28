@@ -6,8 +6,8 @@
 SCRIPT_PATH=$(realpath "$0")
 SCRIPT_HOME=$(dirname "$SCRIPT_PATH")
 WMK_HOME=$(dirname "$SCRIPT_HOME")
-INOTIFYWAIT="$(which inotifywait)"
-FSWATCH="$(which fswatch)"
+INOTIFYWAIT="$(which inotifywait 2>/dev/null)"
+FSWATCH="$(which fswatch 2>/dev/null)"
 ACTION="$1"
 BASEDIR="$2"
 QUICK=""

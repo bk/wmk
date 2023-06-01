@@ -639,6 +639,10 @@ Currently there is support for the following settings:
   `htdocs/`, `data/` or `tmp/`. If the file path does not start with one of
   these, `data` is assumed. The specified (or implied) directory must exist.
 
+- `cleanup_commands`: A list of arbitrary commands to run at the very end of wmk
+  processing. The commands are run in order inside the base directory of the
+  site.
+
 [pymarkdown]: https://python-markdown.github.io/
 [pypandoc]: https://github.com/NicklasTegner/pypandoc
 [ext]: https://python-markdown.github.io/extensions/

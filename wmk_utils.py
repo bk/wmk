@@ -211,8 +211,9 @@ class MDContentList(list):
             return MDContentList([])
         if not isinstance(needles, (list, tuple)):
             needles = [needles]
-        needles = [_.lower() for _ in needles]
         is_bool = len(needles) == 1 and isinstance(needles[0], bool) and needles[0]
+        if not is_bool:
+            needles = [_.lower() for _ in needles]
         def found(x):
             for k in haystack_keys:
                 if k in x:
@@ -317,7 +318,7 @@ class MDContentList(list):
         "Pages/posts in any of the given sections."
         return self.has_taxonomy(['section', 'sections'], sectionlist)
 
-    def page_match(self, match_expr, ordering=None, limit=None):
+    def page_match(self, match_expr, ordering=None, limit=None, inverse=False):
         """
         The `match expr` is either a dict or a list of dicts. Each dict contains
         one or more of the following keys, all of which must match. If a list of
@@ -347,6 +348,9 @@ class MDContentList(list):
         - `exclude_url`: The page with this URL should be omitted (normally the
           calling page).
 
+        `inverse` means that all the above conditions except `exclude_url` will
+        be negated, i.e. will NOT match the specified title, slug, url, etc.
+
         The `ordering` parameter, if specified, should be either
         `title`, `slug`, `url`, `weight` or `date`, with an optional `-` in
         front to indicate reverse ordering. The `limit`, if specified, indicates
@@ -357,6 +361,7 @@ class MDContentList(list):
             'title', 'slug', 'url', 'path', 'doc', 'date_range',
             'has_attrs', 'attrs', 'has_tag', 'in_section', 'in_category',
             'is_post', 'exclude_url')
+        boolval = lambda x: not bool(x) if inverse else bool(x)
         if isinstance(match_expr, dict):
             if not match_expr:
                 raise Exception('No condition for page_match')
@@ -373,42 +378,42 @@ class MDContentList(list):
                     if c_url == x_url:
                         return False
                 for k in ('title', 'slug'):
-                    if k in x and not re.search(x[k], p.get(k, ''), flags=re.I):
+                    if k in x and not boolval(re.search(x[k], p.get(k, ''), flags=re.I)):
                         return False
                 if 'id' in x:
                     idlist = (x['id'], ) if isinstance(x['id'], str) else x['id']
-                    if not p['id'] in idlist:
+                    if not boolval(p['id'] in idlist):
                         return False
-                if 'url' in x and not re.search(x['url'], c['url'], flags=re.I):
+                if 'url' in x and not boolval(re.search(x['url'], c['url'], flags=re.I)):
                     return False
-                if 'path' in x and not re.search(x['path'], c['source_file_short'], flags=re.I):
+                if 'path' in x and not boolval(re.search(x['path'], c['source_file_short'], flags=re.I)):
                     return False
-                if 'doc' in x and not re.search(x['doc'], c['doc'], flags=re.I):
+                if 'doc' in x and not boolval(re.search(x['doc'], c['doc'], flags=re.I)):
                     return False
                 if 'has_attrs' in x:
                     for a in x['has_attrs']:
-                        if not p.get(a):
+                        if not boolval(p.get(a)):
                             return False
                 if 'attrs' in x:
                     for k in x['attrs']:
-                        if not str(p.get(k, '')).lower() == str(x['attrs'][k]).lower():
+                        if not boolval(str(p.get(k, '')).lower() == str(x['attrs'][k]).lower()):
                             return False
                 if 'has_tag' in x:
-                    if not MDContentList([c]).has_tag(x['has_tag']):
+                    if not boolval(MDContentList([c]).has_tag(x['has_tag'])):
                         return False
                 if 'in_section' in x:
-                    if not MDContentList([c]).in_section(x['in_section']):
+                    if not boolval(MDContentList([c]).in_section(x['in_section'])):
                         return False
                 if 'in_category' in x:
-                    if not MDContentList([c]).in_category(x['in_category']):
+                    if not boolval(MDContentList([c]).in_category(x['in_category'])):
                         return False
                 if 'is_post' in x:
                     posts = MDContentList([c]).posts(ordered=False)
-                    if x['is_post'] and not posts:
+                    if x['is_post'] and not boolval(posts):
                         return False
-                    elif not x['is_post'] and posts:
+                    elif not x['is_post'] and boolval(posts):
                         return False
-                if 'date_range' in x and not MDContentList([c]).in_date_range(*x['date_range']):
+                if 'date_range' in x and not boolval(MDContentList([c]).in_date_range(*x['date_range'])):
                     return False
                 return True
             found = self.match_entry(pred)
@@ -448,7 +453,7 @@ class MDContentList(list):
             else:
                 raise Exception('Unknown ordering for page_match: %s' % ordering)
         if limit and len(found) > limit:
-            found = found[:limit]
+            found = MDContentList(found[:limit])
         return found
 
     def write_to(self, dest, context, extra_kwargs=None, template=None):

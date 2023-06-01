@@ -30,7 +30,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.4.0'
+VERSION = '1.4.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -220,6 +220,8 @@ def main(basedir=None, quick=False):
     process_templates(templates, lookup, template_vars, force)
     # 6) render Markdown/HTML content
     process_markdown_content(content, lookup, conf, force)
+    # 7) Cleanup/external post-processing stage
+    run_cleanup_commands(conf, basedir)
 
 
 def preview_single(basedir, preview_file, preview_content=None, with_metadata=False):
@@ -1273,6 +1275,21 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
     return templates
 
 
+def run_cleanup_commands(conf, basedir):
+    cmds = conf.get('cleanup_commands', None)
+    if cmds:
+        print("INFO: Running external cleanup/postprocessing commands:")
+        for cmd in cmds:
+            print('[%s] - assets command: %s' % (datetime.datetime.now(), cmd))
+            ret = subprocess.run(
+                cmd, cwd=basedir, shell=True, capture_output=True, encoding='utf-8')
+            if ret.returncode == 0 and ret.stdout:
+                print('  **OK**:', ret.stdout)
+            elif ret.returncode != 0:
+                print('  **WARNING** cleanup command error [exitcode={}]:'.format(
+                    ret.returncode), ret.stderr)
+
+
 def handle_redirects(redir_file, datadir, webroot):
     if not redir_file:
         return
@@ -1462,8 +1479,11 @@ def build_lunr_index(content, index_fields, langs=None):
         languages = {'languages': langs}
     else:
         langs = {}
+    #saved_locale = locale.getlocale(locale.LC_COLLATE)
+    #locale.setlocale(locale.LC_COLLATE, 'C')
     idx = lunr.lunr(ref='id', fields=weights, documents=documents, **langs)
     idx = idx.serialize()
+    #locale.setlocale(locale.LC_COLLATE, saved_locale)
     summaries_file = os.path.join(webroot, 'idx.summaries.json')
     with open(idx_file, 'w') as f:
         json.dump(idx, f)
@@ -1487,6 +1507,7 @@ def lunr_summary(rec):
         summary = re.sub(r'----*', '', summary)
         summary = re.sub(r'\s+', ' ', summary)
         summary = summary.replace('[TOC]', '')
+        summary = re.sub(r'\[\[.*?\]\]', ' ', summary)
         summary = re.sub(r'\[(.*?)\][\[\(].*?[\]\)]', r'\1', summary)
         summary = re.sub(r'{{<.*?>}}', '', summary)
         summary = re.sub(r'<[^>]*>', r' ', summary)

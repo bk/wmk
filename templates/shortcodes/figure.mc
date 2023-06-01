@@ -20,7 +20,7 @@ if not src.startswith(('/', 'http:', 'https:')):
   % if img_link:
     <a href="${img_link}"${ ' target="{}"'.format(link_target) if link_target else '' }>
   % endif
-  <img src="${src}" alt="${alt}"${ ' width="{}"'.format(width) if width else '' }${ ' height="{}"'.format(height) if height else '' }>
+  <img src="${src}" loading="lazy" alt="${alt}"${ ' width="{}"'.format(width) if width else '' }${ ' height="{}"'.format(height) if height else '' }>
   % if link:
     </a>
   % endif

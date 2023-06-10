@@ -358,7 +358,7 @@ class MDContentList(list):
         """
         found = MDContentList([])
         known_conds = (
-            'title', 'slug', 'url', 'path', 'doc', 'date_range',
+            'title', 'slug', 'id', 'url', 'path', 'doc', 'date_range',
             'has_attrs', 'attrs', 'has_tag', 'in_section', 'in_category',
             'is_post', 'exclude_url')
         boolval = lambda x: not bool(x) if inverse else bool(x)

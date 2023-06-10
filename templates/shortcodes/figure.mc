@@ -21,7 +21,7 @@ if not src.startswith(('/', 'http:', 'https:')):
     <a href="${img_link}"${ ' target="{}"'.format(link_target) if link_target else '' }>
   % endif
   <img src="${src}" loading="lazy" alt="${alt}"${ ' width="{}"'.format(width) if width else '' }${ ' height="{}"'.format(height) if height else '' }>
-  % if link:
+  % if img_link:
     </a>
   % endif
   % if figtitle or caption or credit:

@@ -243,7 +243,7 @@ def strip_html(s):
 
 
 def to_json(d):
-    return json.dumps(d)
+    return json.dumps(d, default=str)
 
 
 def cleanurl(s):

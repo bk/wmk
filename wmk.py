@@ -30,7 +30,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.4.1'
+VERSION = '1.5.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -96,6 +96,7 @@ def main(basedir=None, quick=False):
         from wmk_autoload import autoload
     except:
         pass
+
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
@@ -123,21 +124,28 @@ def main(basedir=None, quick=False):
                 autoload[k] = theme_autoload[k]
         except:
             pass
-    os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
+    if quick:
+        os.system('rsync -a --update "%s/" "%s/"' % (dirs['static'], dirs['output']))
+    else:
+        os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
     # support content bundles (mainly images inside content dir)
     content_extensions = get_content_extensions(conf)
-
     ext_excludes = ' '.join(['--exclude "*{}"'.format(_) for _ in content_extensions.keys()])
+    if quick:
+        ext_excludes = '--update ' + ext_excludes
     os.system(
         'rsync -a ' + ext_excludes + ' --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
         % (dirs['content'], dirs['output']))
+
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
     process_assets(
         dirs['assets'], theme_assets, dirs['output'],
         conf, css_dir_from_start, force)
     assets_map = fingerprint_assets(conf, dirs['output'], dirs['data'])
-    # Global data for template rendering, used by both process_templates
+
+    # 3) Preparation for remaining phases
+    # a) Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = {
         'DATADIR': os.path.realpath(dirs['data']),
@@ -149,7 +157,62 @@ def main(basedir=None, quick=False):
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
     template_vars['nav'] = Nav(conf.get('nav', []))
+    # b) Locale/translation related
     # site.locale affects collation; site.lang affects translations
+    locale_and_translation(template_vars, themedir)
+    # c) Assets fingerprinting
+    # If assets_fingerprinting is off fallback to the 'assets_map' setting
+    template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
+    # Used as a filter in Mako templates
+    template_vars['fingerprint'] = wmf.fingerprint_gen(
+            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
+    # d) Settings-dependent Mako filters
+    # Used as a filter in  Mako templates
+    template_vars['url'] = wmf.url_filter_gen(
+        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
+    lookup_dirs = [dirs['templates']]
+    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
+        lookup_dirs.append(os.path.join(themedir, 'templates'))
+    if conf.get('extra_template_dirs', None):
+        lookup_dirs += conf['extra_template_dirs']
+    # e) Mako search path
+    # Add wmk_home templates for "built-in" shortcodes
+    wmk_home = os.path.dirname(os.path.realpath(__file__))
+    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
+    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
+    if conf.get('mako_imports', None):
+        mako_imports += conf.get('mako_imports')
+    lookup = TemplateLookup(
+        directories=lookup_dirs,
+        imports=mako_imports)
+    conf['_lookup'] = lookup
+
+    # 4) write redirect files
+    if not quick:
+        handle_redirects(
+            conf.get('redirects'), template_vars['DATADIR'], template_vars['WEBROOT'])
+
+    # 5) get info about stand-alone templates and Markdown content
+    template_vars['site'].build_time = datetime.datetime.now()
+    template_vars['site'].lunr_search = conf.get('lunr_index', False)
+    templates = get_templates(
+        dirs['templates'], themedir, dirs['output'], template_vars)
+    index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
+    conf['_index_yaml_data'] = index_yaml or {}
+    content = get_content(
+        dirs['content'], dirs['data'], dirs['output'],
+        template_vars, conf, force)
+
+    # 6) render templates
+    process_templates(templates, lookup, template_vars, force)
+    # 7) render Markdown/HTML content
+    process_markdown_content(content, lookup, conf, force)
+    # 8) Cleanup/external post-processing stage
+    if not quick:
+        run_cleanup_commands(conf, basedir)
+
+
+def locale_and_translation(template_vars, themedir):
     if template_vars['site'].locale:
         print("NOTE: Setting collation locale to", template_vars['site'].locale)
         locale.setlocale(locale.LC_COLLATE, template_vars['site'].locale)
@@ -180,48 +243,6 @@ def main(basedir=None, quick=False):
         # No localization available; nevertheless install the _ shortcut into
         # the global environment for compatibility with templates that use it.
         gettext.install('wmk')
-    # If assets_fingerprinting is off fallback to the 'assets_map' setting
-    template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
-    # Used as a filter in Mako templates
-    template_vars['fingerprint'] = wmf.fingerprint_gen(
-            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
-    # Used as a filter in  Mako templates
-    template_vars['url'] = wmf.url_filter_gen(
-        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
-    lookup_dirs = [dirs['templates']]
-    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
-        lookup_dirs.append(os.path.join(themedir, 'templates'))
-    if conf.get('extra_template_dirs', None):
-        lookup_dirs += conf['extra_template_dirs']
-    # Add wmk_home templates for "built-in" shortcodes
-    wmk_home = os.path.dirname(os.path.realpath(__file__))
-    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
-    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
-    if conf.get('mako_imports', None):
-        mako_imports += conf.get('mako_imports')
-    lookup = TemplateLookup(
-        directories=lookup_dirs,
-        imports=mako_imports)
-    conf['_lookup'] = lookup
-    # 3) write redirect files
-    handle_redirects(
-        conf.get('redirects'), template_vars['DATADIR'], template_vars['WEBROOT'])
-    # 4) get info about stand-alone templates and Markdown content
-    template_vars['site'].build_time = datetime.datetime.now()
-    template_vars['site'].lunr_search = conf.get('lunr_index', False)
-    templates = get_templates(
-        dirs['templates'], themedir, dirs['output'], template_vars)
-    index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
-    conf['_index_yaml_data'] = index_yaml or {}
-    content = get_content(
-        dirs['content'], dirs['data'], dirs['output'],
-        template_vars, conf, force)
-    # 5) render templates
-    process_templates(templates, lookup, template_vars, force)
-    # 6) render Markdown/HTML content
-    process_markdown_content(content, lookup, conf, force)
-    # 7) Cleanup/external post-processing stage
-    run_cleanup_commands(conf, basedir)
 
 
 def preview_single(basedir, preview_file, preview_content=None, with_metadata=False):
@@ -296,33 +317,7 @@ def preview_single(basedir, preview_file, preview_content=None, with_metadata=Fa
     template_vars['site'] = attrdict(conf.get('site', {}))
     template_vars['nav'] = Nav(conf.get('nav', []))
     # Shortcodes may use locales, so we do need them for the preview.
-    # A directory which contains $LANG/LC_MESSAGES/wmk.mo
-    localedir = os.path.join(template_vars['DATADIR'], 'locales')
-    if themedir and not os.path.exists(localedir):
-        theme_locales = os.path.join(themedir, 'data', 'locales')
-        if os.path.exists(theme_locales):
-            localedir = theme_locales
-    if not os.path.exists(localedir):
-        localedir = None
-    if localedir and template_vars['site'].lang:
-        langs = template_vars['site'].lang
-        if isinstance(langs, str):
-            langs = [langs]
-        try:
-            lang = gettext.translation('wmk', localedir=localedir, languages=langs)
-            # Make traditional 'translate message' _ shortcut available globally,
-            # including in templates:
-            lang.install()
-        except FileNotFoundError:
-            # Rather than fall back to system locale, don't use translations at all
-            # in this case. But we still need the _ shortcut...
-            print("WARNING: Translations for locale (site.lang) '{}' not found".format(
-                template_vars['site'].lang))
-            gettext.install('wmk')
-    else:
-        # No localization available; nevertheless install the _ shortcut into
-        # the global environment for compatibility with templates that use it.
-        gettext.install('wmk')
+    locale_and_translation(template_vars, themedir)
     # If assets_fingerprinting is off fallback to the 'assets_map' setting
     template_vars['ASSETS_MAP'] = {}
     # Used as a filter in Mako templates

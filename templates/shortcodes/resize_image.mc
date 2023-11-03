@@ -45,6 +45,8 @@ if not os.path.exists(full_dest):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
     im = Image.open(full_path)
+    # Take account of Orientation Exif tag
+    im = ImageOps.exif_transpose(im)
     if op == 'fill':
         im2 = ImageOps.fit(im, (width, height))
     else:

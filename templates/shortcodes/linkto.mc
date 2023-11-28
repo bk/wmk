@@ -47,9 +47,10 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_app
             raise Exception(
                 'LINKTO: multiple matches found for "%s"' % str(match))
         elif found:
+            url = found[0]['url'].replace('/index.html', '/')
             repl = '<a %s href="%s%s">%s</a>'  % (
                 link_attr,
-                found[0]['url'],
+                url,
                 link_append,
                 (label or found[0]['data']['page'].title))
         return html.replace(placeholder, repl)

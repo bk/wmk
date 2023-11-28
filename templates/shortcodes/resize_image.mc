@@ -1,8 +1,20 @@
-<%page args="path, width, height, op=None, format='jpg', quality=0.8, webroot=None, self_url=None" />\
+<%page args="path, width, height, op=None, format='jpg', quality=0.8, webroot=None, self_url=None, focal_point=None" />\
 <%!
 import os
 from hashlib import sha1
 from PIL import Image, ImageOps
+
+named_focal_points = {
+  'center': (0.5, 0.5),
+  'top': (0.0, 0.5),
+  'top-left': (0.0, 0.0),
+  'top-right': (0.0, 1.0),
+  'bottom': (1.0, 0.5),
+  'bottom-left': (1.0, 0.0),
+  'bottom-right': (1.0, 1.0),
+  'left': (0.5, 0.0),
+  'right': (0.0, 0.5),
+}
 %>\
 <%
 if op and op not in ('fit_width', 'fit_height', 'fit', 'fill'):
@@ -11,6 +23,11 @@ if not format in ('jpg', 'png'):
     raise ValueError('Invalid format: {}'.format(format))
 if not quality <= 1.0 and quality > 0.0:
     raise ValueError('Invalid quality: {}'.format(quality))
+# Only used for .fit(), i.e. scaling to exact size (op == 'fill')
+if focal_point is None:
+    focal_point = (0.5, 0.5)
+elif focal_point in named_focal_points:
+    focal_point = named_focal_points[focal_point]
 width = int(width) if width else None
 height = int(height) if height else None
 if not (width or height):
@@ -33,7 +50,8 @@ if not os.path.exists(full_path):
     print(f'ERROR [resize_image]: {full_path} does not exist (webroot={webroot})')
     return
 hash = sha1('::'.join(
-    [path, str(width), str(height), op, format, str(quality)]).encode('utf-8')).hexdigest()
+    [path, str(width), str(height), op, format,
+     str(quality), str(focal_point)]).encode('utf-8')).hexdigest()
 sizedir = '%sx%s' % (str(width or ''), str(height or ''))
 dest = '/resized_images/' + sizedir + '/' + hash + '.' + format
 target_path = os.path.join(context.get('site_leading_path', ''), dest.strip('/'))
@@ -48,7 +66,7 @@ if not os.path.exists(full_dest):
     # Take account of Orientation Exif tag
     im = ImageOps.exif_transpose(im)
     if op == 'fill':
-        im2 = ImageOps.fit(im, (width, height))
+        im2 = ImageOps.fit(im, (width, height), centering=focal_point)
     else:
         w, h = im.size
         if op == 'fit_width':

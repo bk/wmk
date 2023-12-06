@@ -1382,7 +1382,7 @@ entries for which the predicate (`pred`) is True.
 
 ### Specialized searching/filtering
 
-All of these return a new `MDContentList` object.
+All of these return a new `MDContentList` object (at least by default).
 
 - `posts(self, ordered=True)`: Returns a new `MDContentList` with those entries
   which are blog posts. In practice this means those with markdown sources in
@@ -1429,6 +1429,8 @@ All of these return a new `MDContentList` object.
   files at the top. The `limit`, if specified, obviously indicates the maximum
   number of pages to return.
 
+- `page_match_sql()` – see the "Searching/filtering using SQL" section below.
+
 A `match_expr` for `page_match()` is either a dict or a list of dicts.  If it is
 a dict, each page in the result set must match each of the attributes specified
 in it. If it is a list of dicts, each page in the result set must match at least
@@ -1459,6 +1461,54 @@ attributes (i.e. dict keys) are as follows:
   False will match if the page is not a blog post.
 - `exclude_url`: The page with this URL should be omitted from the results
   (normally the calling page).
+
+### Searching/filtering using SQL
+
+An `MDContentList` has three methods for examining the content using an SQLite
+in-memory database:
+
+- `get_db(self)`: Builds a SQLite database containing a single table, `content`,
+  whose structure is described below. Returns a connection to this database which
+  can then be worked with using normal sqlite3/DBAPI methods. The database has a
+  locale-sensitive collation called `locale` (which applies `locale.strxfrm`)
+  and a custom function `casefold` (which simply applies the Python `casefold`
+  string method). The row factory is `sqlite3.Row`, so row fields can be read
+  using either column names or integer indices.
+
+- `get_db_columns(self)`: Returns a simple list of the columns in the `content`
+  table.
+
+- `page_match_sql(self, where_clause=None, bind=None, order_by=None, limit=None,
+  offset=None, raw_sql=None, raw_result=False, first=False)`: Either
+  `where_clause` or `raw_sql` must be specified. In either case, if `bind` is
+  specified, the bind variables there will be applied to the SQL upon execution.
+  If `order_by` (a string), `limit` or `offest` (integers) are specified, they
+  will be appended to the SQL before executing it against the database
+  connection. The result will be a `MDContentList` unless `raw_result` is True,
+  in which case it is a cursor object.  (If `raw_result` is False but `raw_sql`
+  is supplied, the column list in the SQL select statement must include
+  `source_file` so as to permit the construction of an appropriate
+  `MDContentList`). If `first` is True, only the first item from the results
+  is returned (or None, if the results are empty).
+
+The `content` table constructed by `get_db()` always contains the columns
+`source_file`, `source_file_short`, `url` `target`, `template`, `MTIME`, `DATE`,
+`doc`, and `rendered`. In addition, it contains each `page` metadata field that
+appears in any of the entries in the `MDContentList` in question. These will be
+added as columns with the `page_` prefix; for instance, the `title` field will
+become `page_title`.
+
+It should be noted that all `page` fields added to the table will have to match
+the regular expression `^[a-z]\w*$`. Thus, any metadata field with
+a key that is all uppercase, titlecased, or contains non-word characters
+(such as hyphens) will be omitted. Also, field names are case-sensitive in the
+raw metadata, but case-insensitive in the database table, so inconsistently
+capitalized field names may lead to unexpected results.
+
+A field value that is not either string, integer, float, boolean, date, datetime,
+or None, will be serialized using `json.dumps()` with `ensure_ascii` set to False
+(for easier utf-8 matching). Dates and datetimes are stringified. Booleans will
+be represented as 1 or 0.
 
 ### Sorting
 

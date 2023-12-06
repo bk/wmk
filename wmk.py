@@ -30,7 +30,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.5.1'
+VERSION = '1.6.0'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -210,6 +210,102 @@ def main(basedir=None, quick=False):
     # 8) Cleanup/external post-processing stage
     if not quick:
         run_cleanup_commands(conf, basedir)
+
+
+def get_content_info(basedir='.', content_only=True):
+    """
+    Gets the content (i.e. MDContent) data like it is at the stage where
+    `process_markdown_content()` is called during normal processing.  Intended
+    for development and debugging, i.e. usage in an interactive shell, but may
+    also be used by an external script. If `content_only` is False, returns
+    a tuple of (content, conf, templates).
+    """
+    force = True
+    basedir = os.path.realpath(basedir)
+    if not os.path.isdir(basedir):
+        raise Exception('{} is not a directory'.format(basedir))
+    conf_file = re.sub(
+        r'.*/', '', os.environ.get('WMK_CONFIG', '')) or 'wmk_config.yaml'
+    if not os.path.exists(os.path.join(basedir, conf_file)):
+        print('ERROR: {} does not contain a {}'.format(
+                basedir, conf_file))
+        sys.exit(1)
+    conf = get_config(basedir, conf_file)
+    dirs = get_dirs(basedir, conf)
+    ensure_dirs(dirs)
+    if not dirs['python'] in sys.path:
+        sys.path.insert(0, dirs['python'])
+    global autoload
+    try:
+        from wmk_autoload import autoload
+    except:
+        pass
+    themedir = os.path.join(
+        dirs['themes'], conf.get('theme')) if conf.get('theme') else None
+    if themedir and not os.path.exists(themedir):
+        themedir = None
+    if themedir and not conf.get('ignore_theme_config', False):
+        theme_conf = get_config(themedir, 'wmk_config.yaml')
+        conf_merge(conf, theme_conf)
+    if themedir and os.path.exists(os.path.join(themedir, 'py')):
+        theme_py = os.path.join(themedir, 'py')
+        if not theme_py in sys.path:
+            sys.path.insert(1, os.path.join(themedir, 'py'))
+        try:
+            from wmk_theme_autoload import autoload as theme_autoload
+            for k in theme_autoload:
+                if k in autoload:
+                    continue
+                autoload[k] = theme_autoload[k]
+        except:
+            pass
+    # support content bundles (mainly images inside content dir)
+    content_extensions = get_content_extensions(conf)
+    theme_assets = os.path.join(themedir, 'assets') if themedir else None
+    assets_map = fingerprint_assets(conf, dirs['output'], dirs['data'])
+    template_vars = {
+        'DATADIR': os.path.realpath(dirs['data']),
+        'CONTENTDIR': os.path.realpath(dirs['content']),
+        'WEBROOT': os.path.realpath(dirs['output']),
+        'TEMPLATES': [],
+        'MDCONTENT': MDContentList([]),
+    }
+    template_vars.update(conf.get('template_context', {}))
+    template_vars['site'] = attrdict(conf.get('site', {}))
+    template_vars['nav'] = Nav(conf.get('nav', []))
+    locale_and_translation(template_vars, themedir)
+    template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
+    template_vars['fingerprint'] = wmf.fingerprint_gen(
+            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
+    template_vars['url'] = wmf.url_filter_gen(
+        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
+    lookup_dirs = [dirs['templates']]
+    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
+        lookup_dirs.append(os.path.join(themedir, 'templates'))
+    if conf.get('extra_template_dirs', None):
+        lookup_dirs += conf['extra_template_dirs']
+    wmk_home = os.path.dirname(os.path.realpath(__file__))
+    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
+    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
+    if conf.get('mako_imports', None):
+        mako_imports += conf.get('mako_imports')
+    lookup = TemplateLookup(
+        directories=lookup_dirs,
+        imports=mako_imports)
+    conf['_lookup'] = lookup
+    template_vars['site'].build_time = datetime.datetime.now()
+    template_vars['site'].lunr_search = conf.get('lunr_index', False)
+    templates = get_templates(
+        dirs['templates'], themedir, dirs['output'], template_vars)
+    index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
+    conf['_index_yaml_data'] = index_yaml or {}
+    content = get_content(
+        dirs['content'], dirs['data'], dirs['output'],
+        template_vars, conf, force)
+    if content_only:
+        return content
+    else:
+        return (content, conf, templates)
 
 
 def locale_and_translation(template_vars, themedir):

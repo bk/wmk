@@ -185,6 +185,13 @@ see the "File organization" section below).
   is not designed to allow you to alter the Mako templates, install themes or
   perform other tasks that require more technical knowledge.
 
+- `wmk repl $basedir`: Launch a Python shell (ipython, bpython or python3, in
+  order of preference) with the wmk environment loaded and with the `$basedir`
+  as current working directory. Useful for examining wmk's view of the site
+  content or debugging `MDContent` filtering methods. For these purposes, `from
+  wmk import get_content_info`, followed by `content = get_content_info('.')` is
+  often a good start.
+
 <!-- organization "File organization" 40 -->
 
 ## File organization

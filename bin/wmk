@@ -94,6 +94,7 @@ usage(){
     echo "  wmk admin <dirname> [admin-subdir-name]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache <dirname>"
+    echo "  wmk repl <dirname>"
     echo "Action abbreviations: "
     echo "  b|r|run=build; w=watch; s=serve; ws=watch-serve; c=clear-cache"
     echo "See $WMK_HOME/readme.md for documentation"
@@ -152,6 +153,18 @@ watch_and_serve(){
         PORT=$SERVEPORT
     fi
     (trap 'kill 0' SIGINT; "$0" s "$BASEDIR" -p "$PORT" -i "$IP" & "$0" w "$BASEDIR")
+}
+
+wmk_repl(){
+    pshell=$(which ipython3 || which ipython || which bpython3 || which bpython || which python3)
+    echo "==============================================="
+    echo "In the Python REPL ($pshell), try:"
+    echo "  from wmk import get_content_info"
+    echo "  content = get_content_info('.')"
+    echo "==============================================="
+    cd $BASEDIR
+    export PYTHONPATH=$WMK_HOME
+    exec $pshell
 }
 
 if test -d "$BASEDIR"
@@ -242,6 +255,9 @@ then
             ;;
         c|cl|clean|clear|clean-cache|clear-cache)
             clean_cache
+            ;;
+        repl)
+            wmk_repl
             ;;
         init)
             init "$BASEDIR"

@@ -420,6 +420,7 @@ the following context variables:
   which depend on other markdown content which itself may contain shortcodes.
   The callable receives a dict containing the keys `doc` (the markdown) and
   `data` (the context variables) and returns rendered HTML.
+- `LOOKUP`: The Mako `TemplateLookup` object.
 - `page`: A dict-like object containing the variables defined in the YAML meta
   section at the top of the markdown file, in `index.yaml` files in the markdown
   file directory and its parent directories inside `content`, and possibly in
@@ -742,8 +743,7 @@ The shortcode component will have access to a context composed of (1) the
 parameters directly specified in the shortcode call; (2) the information from
 the metadata block of the markdown file in which it appears; (3) a counter
 variable, `nth`, indicating number of invocations for that kind of shortcode in
-that markdown document; (4) `LOOKUP`, the Mako `TemplateLookup` object; and (5)
-the global template variables.
+that markdown document; and (4) the global template variables.
 
 Shortcodes are applied **before** the content document is converted to HTML, so
 it is possible to replace a shortcode with markdown content which will then be
@@ -912,7 +912,7 @@ The following default shortcodes are provided by the `wmk` installation:
   `css_class`, `autoplay`, `dnt` (do not track), `muted`, `title`.
 
 - `youtube`: A YouTube video. One required argument: `id`. Optional arguments:
-  `css_class`, `autoplay`, `title`.
+  `css_class`, `autoplay`, `title`, `nowrap`, `nocookie`, `width`, `height`.
 
 - `wp`: A link to Wikipedia. One required argument: `title`. Optional arguments:
   `label`, `lang`. Example: `{{< wp('L.L. Zamenhof', lang='eo') >}}`.
@@ -1429,7 +1429,8 @@ All of these return a new `MDContentList` object (at least by default).
   files at the top. The `limit`, if specified, obviously indicates the maximum
   number of pages to return.
 
-- `page_match_sql()` – see the "Searching/filtering using SQL" section below.
+- `page_match_sql()`, `get_db()`, `get_db_columns()` – see "Searching/filtering
+  using SQL" below.
 
 A `match_expr` for `page_match()` is either a dict or a list of dicts.  If it is
 a dict, each page in the result set must match each of the attributes specified

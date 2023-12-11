@@ -30,7 +30,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.6.0'
+VERSION = '1.6.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -1262,6 +1262,7 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
                 data['MTIME'] = datetime.datetime.fromtimestamp(
                     os.path.getmtime(source_file))
             data['RENDERER'] = lambda x: render_markdown(x, conf)
+            data['LOOKUP'] = conf.get('_lookup', None)
             # convert some common datetime strings to datetime objects
             parse_dates(page)
             ext = re.search(r'\.\w+$', source_file).group(0)

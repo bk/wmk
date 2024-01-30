@@ -91,6 +91,7 @@ usage(){
     echo "  wmk serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk watch-serve <dirname> [-p|--port <portnum>] [-i|--ip <ip-addr>]"
     echo "  wmk preview <dirname> file-in-content.md"
+    echo "  wmk init <dirname>"
     echo "  wmk admin <dirname> [admin-subdir-name]"
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache <dirname>"

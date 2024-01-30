@@ -30,7 +30,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.7.0'
+VERSION = '1.7.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -341,7 +341,8 @@ def locale_and_translation(template_vars, themedir):
         gettext.install('wmk')
 
 
-def preview_single(basedir, preview_file, preview_content=None, with_metadata=False):
+def preview_single(basedir, preview_file,
+                   preview_content=None, with_metadata=False, render_draft=True):
     """
     Returns the bare HTML (i.e. not including HTML from Mako templates other
     than shortcodes) for a single named file inside the content directory.
@@ -367,6 +368,8 @@ def preview_single(basedir, preview_file, preview_content=None, with_metadata=Fa
                 basedir, conf_file))
         sys.exit(1)
     conf = get_config(basedir, conf_file)
+    if render_draft:
+        conf['render_drafts'] = True
     dirs = get_dirs(basedir, conf)
     if not dirs['python'] in sys.path:
         sys.path.insert(0, dirs['python'])

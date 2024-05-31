@@ -18,7 +18,7 @@
           flex-direction: column;
           min-height: 100vh;
         }
-        header, header > nav, footer {
+        body > header, header > nav, body > footer {
          background: #333;
          color: #eee;
         }
@@ -32,10 +32,10 @@
         nav .burger~.menu {
           background: #333;
         }
-        header a, footer a {
+        body > header a, body > footer a {
           color: white;
         }
-        footer {
+        body > footer {
           text-align: center;
           font-size: 87.5%;
           padding: 1em 0;

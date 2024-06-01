@@ -21,16 +21,15 @@ import lunr
 
 from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template, TemplateLookupException
-from mako.runtime import Undefined
 
 from wmk_utils import (
-    slugify, attrdict, MDContentList, RenderCache, Nav, Toc)
+    slugify, attrdict, MDContentList, RenderCache, Nav, Toc, hookable)
 import wmk_mako_filters as wmf
 
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.7.1'
+VERSION = '1.8'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -192,20 +191,22 @@ def main(basedir=None, quick=False):
         handle_redirects(
             conf.get('redirects'), template_vars['DATADIR'], template_vars['WEBROOT'])
 
-    # 5) get info about stand-alone templates and Markdown content
+    # 5a) templates
     template_vars['site'].build_time = datetime.datetime.now()
     template_vars['site'].lunr_search = conf.get('lunr_index', False)
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
+    # 5b) inherited yaml metadata
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
     conf['_index_yaml_data'] = index_yaml or {}
+    # 5c) markdown (etc.) content
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
-        template_vars, conf, force)
+        template_vars, conf, force=force)
 
     # 6) render templates
     process_templates(templates, lookup, template_vars, force)
-    # 7) render Markdown/HTML content
+    # 7) render Markdown/HTML/other content
     process_markdown_content(content, lookup, conf, force)
     # 8) Cleanup/external post-processing stage
     if not quick:
@@ -301,7 +302,7 @@ def get_content_info(basedir='.', content_only=True):
     conf['_index_yaml_data'] = index_yaml or {}
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
-        template_vars, conf, force)
+        template_vars, conf, force=force)
     if content_only:
         return content
     else:
@@ -449,7 +450,7 @@ def preview_single(basedir, preview_file,
     conf['_index_yaml_data'] = index_yaml or {}
     content = get_content(
         dirs['content'], dirs['data'], dirs['output'],
-        template_vars, conf, force,
+        template_vars, conf, force=force,
         previewing=preview_file, preview_content=preview_content)
     return content if with_metadata else content['rendered']
 
@@ -472,6 +473,7 @@ def conf_merge(primary, secondary):
                     primary[k][k2] = secondary[k][k2]
 
 
+@hookable
 def get_content_extensions(conf):
     ce = conf.get('content_extensions', None)
     if ce is None and not conf.get('pandoc'):
@@ -492,6 +494,7 @@ def get_content_extensions(conf):
     return DEFAULT_CONTENT_EXTENSIONS
 
 
+@hookable
 def get_assets_map(conf, datadir):
     if not 'assets_map' in conf:
         return {}
@@ -542,6 +545,7 @@ def get_config(basedir, conf_file):
     return conf
 
 
+@hookable
 def process_templates(templates, lookup, template_vars, force):
     """
     Renders the specified templates into the outputdir.
@@ -579,6 +583,7 @@ def process_templates(templates, lookup, template_vars, force):
                 tpl['src']))
 
 
+@hookable
 def process_markdown_content(content, lookup, conf, force):
     """
     Renders the specified markdown content into the outputdir.
@@ -656,6 +661,7 @@ def process_markdown_content(content, lookup, conf, force):
                 str(datetime.datetime.now()), ct['source_file_short']))
 
 
+@hookable
 def postprocess_html(ppr, data, html):
     """
     - ppr is a postprocessing callable or a list of such.
@@ -687,6 +693,7 @@ def postprocess_html(ppr, data, html):
     return html
 
 
+@hookable
 def render_markdown(ct, conf):
     """
     Convert markdown document to HTML (including shortcodes).
@@ -817,6 +824,7 @@ def render_markdown(ct, conf):
     return ret
 
 
+@hookable
 def pandoc_extra_formats(
         doc, pandoc_input, pdformats, pdformats_conf, webroot, sourcefile):
     """
@@ -850,7 +858,7 @@ def pandoc_extra_formats(
                 str(datetime.datetime.now()), out_fn))
 
 
-
+@hookable
 def doc_with_yaml(pg, doc):
     """
     Put YAML frontmatter back (with possible additions via inheritance), for
@@ -883,6 +891,7 @@ def doc_with_yaml(pg, doc):
     return ret
 
 
+@hookable
 def markdown_extensions_settings(pg, conf):
     extensions = pg.get('markdown_extensions',
                         conf.get('markdown_extensions', None))
@@ -913,6 +922,7 @@ def markdown_extensions_settings(pg, conf):
     return (extensions, extension_configs)
 
 
+@hookable
 def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, force):
     """
     Compiles assets from assetdir into outputdir.
@@ -962,6 +972,7 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
         print('[%s] - sass: refresh' % datetime.datetime.now())
 
 
+@hookable
 def fingerprint_assets(conf, webroot, datadir):
     """
     Fingerprint (i.e. add hash to filename) files in the specified directories
@@ -1008,6 +1019,7 @@ def fingerprint_assets(conf, webroot, datadir):
     return assets_map
 
 
+@hookable
 def get_index_yaml_data(ctdir, datadir):
     "Looks for index.yaml files in content dir and registers them by directory."
     ret = {}
@@ -1038,6 +1050,7 @@ def get_index_yaml_data(ctdir, datadir):
     return ret
 
 
+@hookable
 def pandoc_metadata(doc, fn, fmt, projectdir):
     """
     Returns the parsed and converted metadata for the standard Pandoc metadata
@@ -1065,6 +1078,7 @@ def pandoc_metadata(doc, fn, fmt, projectdir):
     return json.loads(ret)
 
 
+@hookable
 def binary_to_markdown(fn, fmt, projectdir=None):
     "Convert a docx/odt/epub file to markdown for further processing."
     if projectdir:
@@ -1084,6 +1098,7 @@ def binary_to_markdown(fn, fmt, projectdir=None):
     return (meta, doc)
 
 
+@hookable
 def maybe_extra_meta(meta, fn):
     """
     Look for a meta file with the same name as the source file, but with '.yaml'
@@ -1101,21 +1116,19 @@ def maybe_extra_meta(meta, fn):
     return meta
 
 
+@hookable
 def get_content(ctdir, datadir, outputdir, template_vars, conf,
                 force=False, previewing=None, preview_content=None):
     """
     Get those markdown files that need processing.
     """
     content = []
-    default_template = conf.get('default_template', 'md_base.mhtml')
-    default_pretty_path = lambda x: False if x.startswith('index.') else True
     known_ids = set()
     content_extensions = get_content_extensions(conf)
     known_exts = tuple(content_extensions.keys())
     extpat = re.compile(r'\.(?:' + '|'.join([_[1:] for _ in known_exts]) + r')$')
     pandoc_meta_exts = ('.org', '.rst', '.tex', '.man', '.rtf',
                         '.xml' '.jats', '.tei', '.docbook')
-    preview_target = os.path.join(ctdir, previewing) if previewing else None
     if previewing:
         files_to_process = [(ctdir, [], [previewing])]
     else:
@@ -1162,136 +1175,21 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
                             "Error when parsing frontmatter for " + source_file + ': ' + str(e))
             if meta.get('draft', False) and not conf.get('render_drafts', False):
                 continue
-            # data is global vars, page is specific to this markdown file
-            data = {}
-            data.update(template_vars)
-            page = {}
-            # load data from relevant index.yaml files
-            idata = conf['_index_yaml_data']
-            for k in sorted(idata.keys()):
-                if source_file_short.strip('/').startswith(k):
-                    page.update(idata[k])
-            page.update(meta)
-            # merge with data from 'LOAD' file(s), if any
-            if 'LOAD' in page:
-                load_path = os.path.join(datadir, page['LOAD'])
-                if os.path.exists(load_path):
-                    loaded = {}
-                    with open(load_path) as yf:
-                        loaded = yaml.safe_load(yf) or {}
-                    for k in loaded:
-                        if not k in page:
-                            page[k] = loaded[k]
-            for k in page:
-                if isinstance(page[k], str) and page[k].startswith('LOAD '):
-                    fn = page[k][5:].strip('"').strip("'")
-                    try:
-                        with open(os.path.join(datadir, fn)) as lf:
-                            loaded = yaml.safe_load(lf) or {}
-                            if loaded:
-                                page[k] = loaded
-                    except Exception as e:
-                        print("LOAD ERROR FOR %s: %s" % (fn, e))
-            # template
-            template = page.get(
-                'template', data.get(
-                    'template', page.get(
-                        'layout', data.get(
-                            'layout', default_template))))
-            if not re.search(r'\.\w{2,5}$', template):
-                template += '.mhtml'
-            if not 'template' in page:
-                page['template'] = template
-            # pretty_path
-            pretty_path = page.get(
-                'pretty_path', data.get('pretty_path', default_pretty_path(fn)))
-            if not 'pretty_path' in page:
-                page['pretty_path'] = pretty_path
-            # Slug determines destination file
-            if 'slug' in page and re.match(r'^[a-z0-9_-]+$', page['slug']):
-                fn = re.sub(r'[^/]+\.(md|html)$', (page['slug']+r'.\1'), fn)
-            # Ensure that the destination file/dir only contains a limited
-            # set of characters -- unless slugify_dirs is False
-            slugify_dirs = page.get('slugify_dirs', True)
-            fn_parts = fn.split('/')
-            if re.search(r'[^A-Za-z0-9_.,=-]', fn_parts[-1]) and slugify_dirs:
-                fn_parts[-1] = slugify(fn_parts[-1])
-            # Ensure that slug is present
-            if not 'slug' in page:
-                page['slug'] = fn_parts[-1][:-3]
-            # Ensure that title is present
-            if not 'title' in page:
-                # first try the main heading
-                found = re.search(r'^##? +(.+)', doc.lstrip())
-                if found:
-                    page['title'] = found.group(1)
-                else:
-                    page['title'] = fn.split('/')[-1]
-                    page['title'] = re.sub(
-                        r'\.(?:md|markdown|mdwn|html?)$', '', page['title'], flags=re.I)
-                    page['title'] = re.sub(r'[_ -]', ' ', page['title']).strip() or page['slug']
-            # Ensure that id is present...
-            if not 'id' in page:
-                page['id'] = slugify(source_file_short[:-3])
-            # ...and that it is unique
-            if page['id'] in known_ids:
-                id_add = 0
-                id_tpl = '%s-%d'
-                while True:
-                    id_try = id_tpl % (page['id'], id_add)
-                    if id_try in known_ids:
-                        id_add += 1
-                        continue
-                    page['id'] = id_try
-                    print("WARNING: changing id of %s to %s to prevent collision"
-                          % (source_file_short, id_try))
-                    break
-            known_ids.add(page['id'])
-            fn = '/'.join(fn_parts)
-            if pretty_path:
-                html_fn = extpat.sub('/index.html', fn)
-            else:
-                html_fn = extpat.sub('.html', fn)
-            html_dir = root.replace(ctdir, outputdir, 1)
-            target_fn = os.path.join(html_dir, html_fn)
-            data['SELF_URL'] = '' if page.get('do_not_render') \
-                else target_fn.replace(outputdir, '', 1)
-            data['SELF_FULL_PATH'] = source_file
-            data['SELF_SHORT_PATH'] = source_file_short
-            data['SELF_TEMPLATE'] = template
-            if previewing:
-                data['MTIME'] = datetime.datetime.now()
-            else:
-                data['MTIME'] = datetime.datetime.fromtimestamp(
-                    os.path.getmtime(source_file))
-            data['RENDERER'] = lambda x: render_markdown(x, conf)
-            data['LOOKUP'] = conf.get('_lookup', None)
-            # convert some common datetime strings to datetime objects
-            parse_dates(page)
-            ext = re.search(r'\.\w+$', source_file).group(0)
-            ext_conf = content_extensions[ext]
-            if ext_conf.get('raw', False):
-                page['_is_html'] = True
-            if ext_conf.get('pandoc', False):
-                page['pandoc'] = True
-            if 'pandoc_input_format' in ext_conf and not page.get('pandoc_input_format', None):
-                page['pandoc_input_format'] = ext_conf['pandoc_input_format']
-            data['page'] = attrdict(page)
-            data['DATE'] = preferred_date(data)
-            content.append({
-                'source_file': source_file,
-                'source_file_short': source_file_short,
-                'target': target_fn,
-                'template': template,
-                'data': data,
-                'doc': doc,
-                'url': data['SELF_URL'],
-            })
-            content[-1]['rendered'] = render_markdown(content[-1], conf)
+            process_content_item(
+                meta, doc, content, conf, template_vars,
+                ctdir, outputdir, datadir, content_extensions, known_ids,
+                root, fn, source_file, source_file_short, extpat,
+                previewing)
     if previewing:
         return content[0]
     content = MDContentList(content)
     template_vars['MDCONTENT'] = content
+    index_content(content, conf, ctdir)
+    return content
+
+
+@hookable
+def index_content(content, conf, ctdir):
     maybe_save_mdcontent_as_json(content, conf, os.path.split(ctdir)[0])
     for it in content:
         it['data']['MDCONTENT'] = content
@@ -1299,9 +1197,152 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
         build_lunr_index(content,
                          conf.get('lunr_index_fields', None),
                          conf.get('lunr_languages', None))
-    return content
 
 
+@hookable
+def process_content_item(
+        meta, doc, content, conf, template_vars,
+        ctdir, outputdir, datadir, content_extensions, known_ids,
+        root, fn, source_file, source_file_short, extpat,
+        previewing):
+    """
+    Makes sure that the content item has the expected metadata (such as title,
+    slug and id, and template), give it the template variables, and add it to
+    the content list. Called for each item processed in get_content().
+    """
+    default_template = conf.get('default_template', 'md_base.mhtml')
+    default_pretty_path = lambda x: False if x.startswith('index.') else True
+    # data is global vars, page is specific to this markdown file
+    data = {}
+    data.update(template_vars)
+    page = {}
+    # load data from relevant index.yaml files
+    idata = conf['_index_yaml_data']
+    for k in sorted(idata.keys()):
+        if source_file_short.strip('/').startswith(k):
+            page.update(idata[k])
+    page.update(meta)
+    # merge with data from 'LOAD' file(s), if any
+    if 'LOAD' in page:
+        load_path = os.path.join(datadir, page['LOAD'])
+        if os.path.exists(load_path):
+            loaded = {}
+            with open(load_path) as yf:
+                loaded = yaml.safe_load(yf) or {}
+            for k in loaded:
+                if not k in page:
+                    page[k] = loaded[k]
+    for k in page:
+        if isinstance(page[k], str) and page[k].startswith('LOAD '):
+            fn = page[k][5:].strip('"').strip("'")
+            try:
+                with open(os.path.join(datadir, fn)) as lf:
+                    loaded = yaml.safe_load(lf) or {}
+                    if loaded:
+                        page[k] = loaded
+            except Exception as e:
+                print("LOAD ERROR FOR %s: %s" % (fn, e))
+    # template
+    template = page.get(
+        'template', data.get(
+            'template', page.get(
+                'layout', data.get(
+                    'layout', default_template))))
+    if not re.search(r'\.\w{2,5}$', template):
+        template += '.mhtml'
+    if not 'template' in page:
+        page['template'] = template
+    # pretty_path
+    pretty_path = page.get(
+        'pretty_path', data.get('pretty_path', default_pretty_path(fn)))
+    if not 'pretty_path' in page:
+        page['pretty_path'] = pretty_path
+    # Slug determines destination file
+    if 'slug' in page and re.match(r'^[a-z0-9_-]+$', page['slug']):
+        fn = re.sub(r'[^/]+\.(md|html)$', (page['slug']+r'.\1'), fn)
+    # Ensure that the destination file/dir only contains a limited
+    # set of characters -- unless slugify_dirs is False
+    slugify_dirs = page.get('slugify_dirs', True)
+    fn_parts = fn.split('/')
+    if re.search(r'[^A-Za-z0-9_.,=-]', fn_parts[-1]) and slugify_dirs:
+        fn_parts[-1] = slugify(fn_parts[-1])
+    # Ensure that slug is present
+    if not 'slug' in page:
+        page['slug'] = fn_parts[-1][:-3]
+    # Ensure that title is present
+    if not 'title' in page:
+        # first try the main heading
+        found = re.search(r'^##? +(.+)', doc.lstrip())
+        if found:
+            page['title'] = found.group(1)
+        else:
+            page['title'] = fn.split('/')[-1]
+            page['title'] = re.sub(
+                r'\.(?:md|markdown|mdwn|html?)$', '', page['title'], flags=re.I)
+            page['title'] = re.sub(r'[_ -]', ' ', page['title']).strip() or page['slug']
+    # Ensure that id is present...
+    if not 'id' in page:
+        page['id'] = slugify(source_file_short[:-3])
+    # ...and that it is unique
+    if page['id'] in known_ids:
+        id_add = 0
+        id_tpl = '%s-%d'
+        while True:
+            id_try = id_tpl % (page['id'], id_add)
+            if id_try in known_ids:
+                id_add += 1
+                continue
+            page['id'] = id_try
+            print("WARNING: changing id of %s to %s to prevent collision"
+                  % (source_file_short, id_try))
+            break
+    known_ids.add(page['id'])
+    fn = '/'.join(fn_parts)
+    if pretty_path:
+        html_fn = extpat.sub('/index.html', fn)
+    else:
+        html_fn = extpat.sub('.html', fn)
+    html_dir = root.replace(ctdir, outputdir, 1)
+    target_fn = os.path.join(html_dir, html_fn)
+    data['SELF_URL'] = '' if page.get('do_not_render') \
+        else target_fn.replace(outputdir, '', 1)
+    data['SELF_FULL_PATH'] = source_file
+    data['SELF_SHORT_PATH'] = source_file_short
+    data['SELF_TEMPLATE'] = template
+    if 'MTIME' in page or '_mtime' in page:
+        data['MTIME'] = page.get('MTIME') or page.get('_mtime')
+    elif previewing:
+        data['MTIME'] = datetime.datetime.now()
+    else:
+        data['MTIME'] = datetime.datetime.fromtimestamp(
+            os.path.getmtime(source_file))
+    data['RENDERER'] = lambda x: render_markdown(x, conf)
+    data['LOOKUP'] = conf.get('_lookup', None)
+    # convert some common datetime strings to datetime objects
+    parse_dates(page)
+    ext = re.search(r'\.\w+$', source_file).group(0)
+    ext_conf = content_extensions[ext]
+    if ext_conf.get('raw', False):
+        page['_is_html'] = True
+    if ext_conf.get('pandoc', False):
+        page['pandoc'] = True
+    if 'pandoc_input_format' in ext_conf and not page.get('pandoc_input_format', None):
+        page['pandoc_input_format'] = ext_conf['pandoc_input_format']
+    data['page'] = attrdict(page)
+    data['DATE'] = preferred_date(data)
+    content.append({
+        'source_file': source_file,
+        'source_file_short': source_file_short,
+        'target': target_fn,
+        'template': template,
+        'data': data,
+        'doc': doc,
+        'url': data['SELF_URL'],
+    })
+    content[-1]['rendered'] = render_markdown(content[-1], conf)
+
+
+@hookable
 def preferred_date(data):
     """
     Pick a date by priority among several date keys in `page`, with `MTIME` as
@@ -1313,6 +1354,7 @@ def preferred_date(data):
     return data['MTIME']
 
 
+@hookable
 def parse_dates(data):
     for k in KNOWN_DATE_KEYS:
         if k in data:
@@ -1329,6 +1371,7 @@ def parse_dates(data):
                 pass
 
 
+@hookable
 def get_templates(tpldir, themedir, outputdir, template_vars):
     """
     Get those templates that need processing.
@@ -1370,6 +1413,7 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
     return templates
 
 
+@hookable
 def run_cleanup_commands(conf, basedir):
     cmds = conf.get('cleanup_commands', None)
     if cmds:
@@ -1385,6 +1429,7 @@ def run_cleanup_commands(conf, basedir):
                     ret.returncode), ret.stderr)
 
 
+@hookable
 def handle_redirects(redir_file, datadir, webroot):
     if not redir_file:
         return
@@ -1409,6 +1454,7 @@ def handle_redirects(redir_file, datadir, webroot):
             write_redir_file(from_path, redir_to, webroot)
 
 
+@hookable
 def write_redir_file(from_path, redir_to, webroot):
     if from_path.endswith('/'):
         from_path += 'index.html'
@@ -1480,6 +1526,7 @@ def parse_argstr(argstr):
         raise Exception("Could not parse argstr: {}".format(argstr))
 
 
+@hookable
 def mako_shortcode(conf, ctx, nth=None):
     "Return a match replacement function for mako shortcode handling."
     if nth is None:
@@ -1511,6 +1558,7 @@ def mako_shortcode(conf, ctx, nth=None):
     return replacer
 
 
+@hookable
 def maybe_save_mdcontent_as_json(content, conf, basedir):
     full_dump = conf.get('mdcontent_json', None)
     if full_dump and full_dump.endswith('.json'):
@@ -1529,6 +1577,7 @@ def maybe_save_mdcontent_as_json(content, conf, basedir):
         print("WARNING: Invalid config value for mdcontent_json: '%s'" % full_dump)
 
 
+@hookable
 def build_lunr_index(content, index_fields, langs=None):
     """
     Builds a search index compatible with lunr.js and writes it as '/idx.json'.
@@ -1589,6 +1638,8 @@ def build_lunr_index(content, index_fields, langs=None):
     print('[%s] - lunr index: %s [build time: %s]' % (
         str(end), '/idx.json', duration))
 
+
+@hookable
 def lunr_summary(rec):
     ret = {'title': rec.get('title', rec['id'])}
     for k in ('summary', 'intro', 'description'):
@@ -1610,6 +1661,8 @@ def lunr_summary(rec):
         summary = summary[:200].strip()
         ret['summary'] = summary
     return ret
+
+
 
 
 if __name__ == '__main__':

@@ -1000,3 +1000,44 @@ class TocItem:
             while cand.level < child.level - 1:
                 cand = cand.children[-1]
             cand.children.append(child)
+
+
+def hookable(fn):
+    nam = fn.__name__
+    orig_fn = fn
+    def wrapper(*args, **kwargs):
+        try:
+            import wmk_hooks
+        except ModuleNotFoundError:
+            wmk_hooks = None
+        try:
+            import wmk_theme_hooks
+        except ModuleNotFoundError:
+            wmk_theme_hooks = None
+        if not (wmk_hooks or wmk_theme_hooks):
+            return orig_fn(*args, **kwargs)
+        new_fn = None
+        if hasattr(wmk_hooks, nam):
+            new_fn = getattr(wmk_hooks, nam)
+        elif hasattr(wmk_theme_hooks, nam):
+            new_fn = getattr(wmk_theme_hooks, nam)
+        actions = {'before': None, 'after': None}
+        for action in ('before', 'after'):
+            for hooks in (wmk_hooks, wmk_theme_hooks):
+                if hasattr(hooks, f'{nam}__{action}'):
+                    actions[action] = getattr(hooks, f'{nam}__{action}')
+                    break
+        if actions['before']:
+            ret = actions['before'](*args, **kwargs)
+            if isinstance(ret, tuple):
+                args = ret[0]
+                kwargs.update(ret[1])
+            elif isinstance(ret, dict):
+                kwargs.update(ret)
+        main_ret = new_fn(*args, **kwargs) if new_fn else orig_fn(*args, **kwargs)
+        if actions['after']:
+            ret = actions['after'](main_ret)
+            if ret:
+                return ret
+        return main_ret
+    return wrapper

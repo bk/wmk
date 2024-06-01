@@ -1,9 +1,13 @@
-<%page args="match_expr, exclude_expr=None, ordering=None, limit=None, template=None, fallback='', template_args=None" />\
+<%page args="match_expr, exclude_expr=None, ordering=None, limit=None, template=None, fallback='', template_args=None, sql_match=False" />\
 <%!
-def pagelist_handler(match_expr, exclude_expr, ordering, limit, template, fallback, nth, lookup, template_args):
+def pagelist_handler(match_expr, exclude_expr, ordering, limit, template, fallback, nth, lookup, template_args, sql_match):
     placeholder = '((PAGELIST::%d))' % nth
     def cb(html, **data):
-        found = data['MDCONTENT'].page_match(match_expr, ordering, limit if not exclude_expr else None)
+        if sql_match:
+            found = data['MDCONTENT'].page_match_sql(
+                where_clause=match_expr, order_by=ordering, limit=limit)
+        else:
+            found = data['MDCONTENT'].page_match(match_expr, ordering, limit if not exclude_expr else None)
         if exclude_expr:
             found = found.page_match(exclude_expr, ordering, limit, inverse=True)
         repl = fallback
@@ -28,6 +32,6 @@ page.no_cache = True
 if template_args is None:
     template_args = {}
 page.POSTPROCESS.append(
-    pagelist_handler(match_expr, exclude_expr, ordering, limit, template, fallback, nth, LOOKUP, template_args))
+    pagelist_handler(match_expr, exclude_expr, ordering, limit, template, fallback, nth, LOOKUP, template_args, sql_match))
 %>\
 ((PAGELIST::${ nth}))\

@@ -880,19 +880,21 @@ The following default shortcodes are provided by the `wmk` installation:
 
 - `pagelist`: Runs a `page_match()` and lists the found pages. Required argument:
   `match_expr`. Optional arguments: `exclude_expr`, `ordering`, `limit`,
-  `template`, `fallback`, `template_args`. `exclude_expr` is a match expression
-  which serves to *exclude* pages from the list found using the `match_expr`.
-  For instance, `pagelist({'has_tag': True}, exclude_expr={'has_tag':
-  'private'})` finds all tagged pages except those that have the tag `private`.
-  The default way of representing the found pages is a simple unordered list of
-  links to them, using the page titles as the link text. If nothing is found, a
-  string specified in the `fallback` parameter (by default an empty string)
-  replaces the shortcode call. The formatting of the list can be changed by
-  pointing to a Mako template using the `template` argument, which will receive
-  the argument `pagelist` (a `MDContentList` of found pages), as well as
-  `template_args`, if any. The template will only be called if something is
-  found.
-
+  `template`, `fallback`, `template_args`, `sql_match`. `exclude_expr` is a
+  match expression which serves to *exclude* pages from the list found using the
+  `match_expr`.  For instance, `pagelist({'has_tag': True},
+  exclude_expr={'has_tag': 'private'})` finds all tagged pages except those that
+  have the tag `private`.  The default way of representing the found pages is a
+  simple unordered list of links to them, using the page titles as the link
+  text. If nothing is found, a string specified in the `fallback` parameter (by
+  default an empty string) replaces the shortcode call. The formatting of the
+  list can be changed by pointing to a Mako template using the `template`
+  argument, which will receive the argument `pagelist` (a `MDContentList` of
+  found pages), as well as `template_args`, if any. The template will only be
+  called if something is found. If `sql_match` is True, the `match_expr` and
+  `ordering` and `limit` will be passed to `page_match_sql()` (as
+  `where_clause`, `order_by`, and `limit`, respectively) rather than to
+  `page_match()`.
 - `resize_image`: Scales and crops images to a specified size. Required
   arguments: `path`, `width`, `height`. Optional arguments: `op` ('fit_width',
   'fit_height', 'fit', 'fill'; the last is the default), `format` ('jpg' or
@@ -1490,7 +1492,7 @@ in-memory database:
   offset=None, raw_sql=None, raw_result=False, first=False)`: Either
   `where_clause` or `raw_sql` must be specified. In either case, if `bind` is
   specified, the bind variables there will be applied to the SQL upon execution.
-  If `order_by` (a string), `limit` or `offest` (integers) are specified, they
+  If `order_by` (a string), `limit` or `offset` (integers) are specified, they
   will be appended to the SQL before executing it against the database
   connection. The result will be a `MDContentList` unless `raw_result` is True,
   in which case it is a cursor object.  (If `raw_result` is False but `raw_sql`
@@ -1669,6 +1671,7 @@ before or after them, or can be redefined entirely:
 - `get_assets_map`
 - `get_content_extensions`
 - `get_content`
+- `get_extra_content`
 - `get_index_yaml_data`
 - `get_templates`
 - `handle_redirects`
@@ -1715,13 +1718,12 @@ change your hook functions.
 
 ### Example
 
-Here is a slightly simplified `get_content()` def which fetches the content from
-a database rather than from the `content/` directory.
+Here is a generic `get_extra_content()` def which adds HTML pages fetched from a
+database to the "normal" content from the `content/` directory:
 
 ```
-def get_content(ctdir, datadir, outputdir, template_vars, conf, **kwargs):
-    content = []
-    known_ids = set()
+def get_extra_content(content, ctdir, datadir, outputdir, template_vars, conf):
+    known_ids = set([_['data']['page']['id'] for _ in content])
     content_extensions = { '.html': {'raw': True}, }
     extpat = re.compile(r'\.html$')
     result = _get_articles_from_database()
@@ -1733,10 +1735,6 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf, **kwargs):
             pseudo['root'], pseudo['fn'],
             pseudo['source_file'], pseudo['source_file_short'],
             extpat, False)
-    content = wmk.MDContentList(content)
-    template_vars['MDCONTENT'] = content
-    wmk.index_content(content, conf, ctdir)
-    return content
 ```
 
 The functions `_get_articles_from_database()` and `_munge_row()` are left as an

@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.8'
+VERSION = '1.8.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -1182,10 +1182,28 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
                 previewing)
     if previewing:
         return content[0]
+    get_extra_content(
+        content, ctdir=ctdir, datadir=datadir, outputdir=outputdir,
+        template_vars=template_vars, conf=conf)
     content = MDContentList(content)
     template_vars['MDCONTENT'] = content
     index_content(content, conf, ctdir)
     return content
+
+
+@hookable
+def get_extra_content(
+        content, ctdir=None, datadir=None, outputdir=None,
+        template_vars=None, conf=None):
+    """
+    Exists only to be overridden in a hooks file (i.e. wmk_hooks or
+    wmk_theme_hooks).  Makes it possible to use content from the normal content
+    folder but also to get it from other sources.
+
+    NOTE: An implementation of this function should normally add items to `content` by
+    calling process_content_item for each of them.
+    """
+    return
 
 
 @hookable

@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.8.1'
+VERSION = '1.8.2'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -1046,7 +1046,8 @@ def get_index_yaml_data(ctdir, datadir):
                     except:
                         pass
             removed = info.pop('LOAD', None)
-            ret[curdir] = info
+            retkey = curdir + '/' if curdir else ''
+            ret[retkey] = info
     return ret
 
 

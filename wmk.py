@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.8.2'
+VERSION = '1.8.3'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -194,6 +194,8 @@ def main(basedir=None, quick=False):
     # 5a) templates
     template_vars['site'].build_time = datetime.datetime.now()
     template_vars['site'].lunr_search = conf.get('lunr_index', False)
+    # Does nothing unless overridden. Affects both template and md content.
+    extra_template_vars(template_vars, conf)
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
     # 5b) inherited yaml metadata
@@ -296,6 +298,8 @@ def get_content_info(basedir='.', content_only=True):
     conf['_lookup'] = lookup
     template_vars['site'].build_time = datetime.datetime.now()
     template_vars['site'].lunr_search = conf.get('lunr_index', False)
+    # Does nothing unless overridden. Affects both template and md content.
+    extra_template_vars(template_vars, conf)
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
@@ -444,8 +448,8 @@ def preview_single(basedir, preview_file,
     # 4) get info about stand-alone templates and Markdown content
     template_vars['site'].build_time = datetime.datetime.now()
     template_vars['site'].lunr_search = conf.get('lunr_index', False)
-    templates = get_templates(
-        dirs['templates'], themedir, dirs['output'], template_vars)
+    # Does nothing unless overridden.
+    extra_template_vars(template_vars, conf)
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
     conf['_index_yaml_data'] = index_yaml or {}
     content = get_content(
@@ -513,6 +517,12 @@ def get_assets_map(conf, datadir):
             elif am.endswith('yaml'):
                 return yaml.safe_load(f)
     return {}
+
+
+@hookable
+def extra_template_vars(template_vars, conf):
+    """Override this to add something to the template_vars."""
+    return
 
 
 def get_dirs(basedir, conf):

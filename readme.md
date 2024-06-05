@@ -1667,6 +1667,7 @@ before or after them, or can be redefined entirely:
 - `binary_to_markdown`
 - `build_lunr_index`
 - `doc_with_yaml`
+- `extra_template_vars`
 - `fingerprint_assets`
 - `get_assets_map`
 - `get_content_extensions`
@@ -1716,12 +1717,12 @@ you may write is compatible with the original in terms of its parameters and
 possible return values. Updates to `wmk` may of course make it necessary to
 change your hook functions.
 
-### Example
+### Examples
 
 Here is a generic `get_extra_content()` def which adds HTML pages fetched from a
 database to the "normal" content from the `content/` directory:
 
-```
+```python
 def get_extra_content(content, ctdir, datadir, outputdir, template_vars, conf):
     known_ids = set([_['data']['page']['id'] for _ in content])
     content_extensions = { '.html': {'raw': True}, }
@@ -1739,3 +1740,15 @@ def get_extra_content(content, ctdir, datadir, outputdir, template_vars, conf):
 
 The functions `_get_articles_from_database()` and `_munge_row()` are left as an
 exercise for the reader.
+
+Here is an `__after` hook for `maybe_extra_meta()` which fetches a conference
+schedule (e.g. from from an online calendar) if the `conference_id` key is
+present in the frontmatter.  The retreived information will then be available to
+templates as `page.schedule`.
+
+```python
+def maybe_extra_meta__after(meta):
+    if 'conference_id' in meta:
+        meta['schedule'] = _get_conference_schedule(meta['conference_id'])
+    return meta
+```

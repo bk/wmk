@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.8.4'
+VERSION = '1.8.5'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -900,13 +900,10 @@ def doc_with_yaml(pg, doc):
     try:
         return '---\n' + yaml.safe_dump(safe_pg) + '---\n\n' + doc
     except yaml.representer.RepresenterError:
-        print("WARNING: Falling back to yaml.dump because of RepresenterError")
-        # Handle a nested attrdict somewhat gracefully
-        yaml.add_representer(
-            attrdict,
-            lambda dumper, data: dumper.represent_mapping(
-                'tag:yaml.org,2002:map', data.items()))
-        return '---\n' + yaml.dump(safe_pg) + '---\n\n' + doc
+        # A likely cause of this error is a nested attrdict loaded from a hook.
+        print("WARNING: Got RepresenterError; simplifying frontmatter for pandoc")
+        sanitized = json.loads(json.dumps(safe_pg, default=str))
+        return '---\n' + yaml.safe_dump(sanitized) + '---\n\n' + doc
 
 
 @hookable

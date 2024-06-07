@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.8.5'
+VERSION = '1.8.6'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -99,6 +99,7 @@ def main(basedir=None, quick=False):
     # 1) copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
+    # a) preparation, loading plugins, setting sys.path etc
     themedir = os.path.join(
         dirs['themes'], conf.get('theme')) if conf.get('theme') else None
     if themedir and not os.path.exists(themedir):
@@ -108,9 +109,6 @@ def main(basedir=None, quick=False):
         # NOTE that WMK_CONFIG does not affect theme settings.
         theme_conf = get_config(themedir, 'wmk_config.yaml')
         conf_merge(conf, theme_conf)
-    if themedir and os.path.exists(os.path.join(themedir, 'static')):
-        os.system('rsync -a "%s/" "%s/"' % (
-            os.path.join(themedir, 'static'), dirs['output']))
     if themedir and os.path.exists(os.path.join(themedir, 'py')):
         theme_py = os.path.join(themedir, 'py')
         if not theme_py in sys.path:
@@ -123,18 +121,9 @@ def main(basedir=None, quick=False):
                 autoload[k] = theme_autoload[k]
         except:
             pass
-    if quick:
-        os.system('rsync -a --update "%s/" "%s/"' % (dirs['static'], dirs['output']))
-    else:
-        os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
-    # support content bundles (mainly images inside content dir)
-    content_extensions = get_content_extensions(conf)
-    ext_excludes = ' '.join(['--exclude "*{}"'.format(_) for _ in content_extensions.keys()])
-    if quick:
-        ext_excludes = '--update ' + ext_excludes
-    os.system(
-        'rsync -a ' + ext_excludes + ' --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
-        % (dirs['content'], dirs['output']))
+    # b) Doing the actual copying.
+    #    (NOTE: hookable works at this point, since sys.path is ready).
+    copy_static_files(dirs, themedir, conf, quick)
 
     # 2) compile assets (only scss for now):
     theme_assets = os.path.join(themedir, 'assets') if themedir else None
@@ -146,44 +135,8 @@ def main(basedir=None, quick=False):
     # 3) Preparation for remaining phases
     # a) Global data for template rendering, used by both process_templates
     # and process_markdown_content.
-    template_vars = {
-        'DATADIR': os.path.realpath(dirs['data']),
-        'CONTENTDIR': os.path.realpath(dirs['content']),
-        'WEBROOT': os.path.realpath(dirs['output']),
-        'TEMPLATES': [],
-        'MDCONTENT': MDContentList([]),
-    }
-    template_vars.update(conf.get('template_context', {}))
-    template_vars['site'] = attrdict(conf.get('site', {}))
-    template_vars['nav'] = Nav(conf.get('nav', []))
-    # b) Locale/translation related
-    # site.locale affects collation; site.lang affects translations
-    locale_and_translation(template_vars, themedir)
-    # c) Assets fingerprinting
-    # If assets_fingerprinting is off fallback to the 'assets_map' setting
-    template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
-    # Used as a filter in Mako templates
-    template_vars['fingerprint'] = wmf.fingerprint_gen(
-            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
-    # d) Settings-dependent Mako filters
-    # Used as a filter in  Mako templates
-    template_vars['url'] = wmf.url_filter_gen(
-        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
-    lookup_dirs = [dirs['templates']]
-    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
-        lookup_dirs.append(os.path.join(themedir, 'templates'))
-    if conf.get('extra_template_dirs', None):
-        lookup_dirs += conf['extra_template_dirs']
-    # e) Mako search path
-    # Add wmk_home templates for "built-in" shortcodes
-    wmk_home = os.path.dirname(os.path.realpath(__file__))
-    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
-    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
-    if conf.get('mako_imports', None):
-        mako_imports += conf.get('mako_imports')
-    lookup = TemplateLookup(
-        directories=lookup_dirs,
-        imports=mako_imports)
+    template_vars = get_template_vars(dirs, themedir, conf, assets_map)
+    lookup = get_mako_lookup(dirs, themedir, conf)
     conf['_lookup'] = lookup
 
     # 4) write redirect files
@@ -192,10 +145,6 @@ def main(basedir=None, quick=False):
             conf.get('redirects'), template_vars['DATADIR'], template_vars['WEBROOT'])
 
     # 5a) templates
-    template_vars['site'].build_time = datetime.datetime.now()
-    template_vars['site'].lunr_search = conf.get('lunr_index', False)
-    # Does nothing unless overridden. Affects both template and md content.
-    extra_template_vars(template_vars, conf)
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
     # 5b) inherited yaml metadata
@@ -262,44 +211,10 @@ def get_content_info(basedir='.', content_only=True):
                 autoload[k] = theme_autoload[k]
         except:
             pass
-    # support content bundles (mainly images inside content dir)
-    content_extensions = get_content_extensions(conf)
-    theme_assets = os.path.join(themedir, 'assets') if themedir else None
     assets_map = fingerprint_assets(conf, dirs['output'], dirs['data'])
-    template_vars = {
-        'DATADIR': os.path.realpath(dirs['data']),
-        'CONTENTDIR': os.path.realpath(dirs['content']),
-        'WEBROOT': os.path.realpath(dirs['output']),
-        'TEMPLATES': [],
-        'MDCONTENT': MDContentList([]),
-    }
-    template_vars.update(conf.get('template_context', {}))
-    template_vars['site'] = attrdict(conf.get('site', {}))
-    template_vars['nav'] = Nav(conf.get('nav', []))
-    locale_and_translation(template_vars, themedir)
-    template_vars['ASSETS_MAP'] = assets_map or get_assets_map(conf, template_vars['DATADIR'])
-    template_vars['fingerprint'] = wmf.fingerprint_gen(
-            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
-    template_vars['url'] = wmf.url_filter_gen(
-        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
-    lookup_dirs = [dirs['templates']]
-    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
-        lookup_dirs.append(os.path.join(themedir, 'templates'))
-    if conf.get('extra_template_dirs', None):
-        lookup_dirs += conf['extra_template_dirs']
-    wmk_home = os.path.dirname(os.path.realpath(__file__))
-    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
-    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
-    if conf.get('mako_imports', None):
-        mako_imports += conf.get('mako_imports')
-    lookup = TemplateLookup(
-        directories=lookup_dirs,
-        imports=mako_imports)
+    template_vars = get_template_vars(dirs, themedir, conf, assets_map)
+    lookup = get_mako_lookup(dirs, themedir, conf)
     conf['_lookup'] = lookup
-    template_vars['site'].build_time = datetime.datetime.now()
-    template_vars['site'].lunr_search = conf.get('lunr_index', False)
-    # Does nothing unless overridden. Affects both template and md content.
-    extra_template_vars(template_vars, conf)
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
@@ -313,6 +228,55 @@ def get_content_info(basedir='.', content_only=True):
         return (content, conf, templates)
 
 
+@hookable
+def get_template_vars(dirs, themedir, conf, assets_map=None):
+    template_vars = {
+        'DATADIR': os.path.realpath(dirs['data']),
+        'CONTENTDIR': os.path.realpath(dirs['content']),
+        'WEBROOT': os.path.realpath(dirs['output']),
+        'TEMPLATES': [],
+        'MDCONTENT': MDContentList([]),
+    }
+    template_vars.update(conf.get('template_context', {}))
+    template_vars['site'] = attrdict(conf.get('site', {}))
+    template_vars['nav'] = Nav(conf.get('nav', []))
+    # b) Locale/translation related
+    # site.locale affects collation; site.lang affects translations
+    locale_and_translation(template_vars, themedir)
+    # c) Assets fingerprinting
+    # If assets_fingerprinting is off fallback to the 'assets_map' setting
+    template_vars['ASSETS_MAP'] = get_assets_map(
+        conf, template_vars['DATADIR']) if assets_map is None else assets_map
+    # Used as a filter in Mako templates
+    template_vars['fingerprint'] = wmf.fingerprint_gen(
+            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
+    # d) Settings-dependent Mako filters
+    # Used as a filter in  Mako templates
+    template_vars['url'] = wmf.url_filter_gen(
+        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
+    template_vars['site'].build_time = datetime.datetime.now()
+    template_vars['site'].lunr_search = conf.get('lunr_index', False)
+    return template_vars
+
+
+@hookable
+def get_mako_lookup(dirs, themedir, conf):
+    lookup_dirs = [dirs['templates']]
+    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
+        lookup_dirs.append(os.path.join(themedir, 'templates'))
+    if conf.get('extra_template_dirs', None):
+        lookup_dirs += conf['extra_template_dirs']
+    # e) Mako search path
+    # Add wmk_home templates for "built-in" shortcodes
+    wmk_home = os.path.dirname(os.path.realpath(__file__))
+    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
+    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
+    if conf.get('mako_imports', None):
+        mako_imports += conf.get('mako_imports')
+    return TemplateLookup(directories=lookup_dirs, imports=mako_imports)
+
+
+@hookable
 def locale_and_translation(template_vars, themedir):
     if template_vars['site'].locale:
         print("NOTE: Setting collation locale to", template_vars['site'].locale)
@@ -405,51 +369,12 @@ def preview_single(basedir, preview_file,
                 autoload[k] = theme_autoload[k]
         except:
             pass
-    # support content bundles (mainly images inside content dir)
-    content_extensions = get_content_extensions(conf)
-
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
-    template_vars = {
-        'DATADIR': os.path.realpath(dirs['data']),
-        'CONTENTDIR': os.path.realpath(dirs['content']),
-        'WEBROOT': os.path.realpath(dirs['output']),
-        'TEMPLATES': [],
-        'MDCONTENT': MDContentList([]),
-    }
-    template_vars.update(conf.get('template_context', {}))
-    template_vars['site'] = attrdict(conf.get('site', {}))
-    template_vars['nav'] = Nav(conf.get('nav', []))
-    # Shortcodes may use locales, so we do need them for the preview.
-    locale_and_translation(template_vars, themedir)
-    # If assets_fingerprinting is off fallback to the 'assets_map' setting
-    template_vars['ASSETS_MAP'] = {}
-    # Used as a filter in Mako templates
-    template_vars['fingerprint'] = wmf.fingerprint_gen(
-            template_vars['WEBROOT'], template_vars['ASSETS_MAP'])
-    # Used as a filter in  Mako templates
-    template_vars['url'] = wmf.url_filter_gen(
-        template_vars['site'].leading_path or template_vars['site'].base_url or '/')
-    lookup_dirs = [dirs['templates']]
-    if themedir and os.path.exists(os.path.join(themedir, 'templates')):
-        lookup_dirs.append(os.path.join(themedir, 'templates'))
-    if conf.get('extra_template_dirs', None):
-        lookup_dirs += conf['extra_template_dirs']
-    # Add wmk_home templates for "built-in" shortcodes
-    wmk_home = os.path.dirname(os.path.realpath(__file__))
-    lookup_dirs.append(os.path.join(wmk_home, 'templates'))
-    mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
-    if conf.get('mako_imports', None):
-        mako_imports += conf.get('mako_imports')
-    lookup = TemplateLookup(
-        directories=lookup_dirs,
-        imports=mako_imports)
+    template_vars = get_template_vars(dirs, themedir, conf, assets_map=None)
+    lookup = get_mako_lookup(dirs, themedir, conf)
     conf['_lookup'] = lookup
     # 4) get info about stand-alone templates and Markdown content
-    template_vars['site'].build_time = datetime.datetime.now()
-    template_vars['site'].lunr_search = conf.get('lunr_index', False)
-    # Does nothing unless overridden.
-    extra_template_vars(template_vars, conf)
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
     conf['_index_yaml_data'] = index_yaml or {}
     content = get_content(
@@ -475,6 +400,25 @@ def conf_merge(primary, secondary):
             for k2 in secondary[k]:
                 if not k2 in primary[k]:
                     primary[k][k2] = secondary[k][k2]
+
+
+@hookable
+def copy_static_files(dirs, themedir, conf, quick=False):
+    if themedir and os.path.exists(os.path.join(themedir, 'static')):
+        os.system('rsync -a "%s/" "%s/"' % (
+            os.path.join(themedir, 'static'), dirs['output']))
+    if quick:
+        os.system('rsync -a --update "%s/" "%s/"' % (dirs['static'], dirs['output']))
+    else:
+        os.system('rsync -a "%s/" "%s/"' % (dirs['static'], dirs['output']))
+    # support content bundles (mainly images inside content dir)
+    content_extensions = get_content_extensions(conf)
+    ext_excludes = ' '.join(['--exclude "*{}"'.format(_) for _ in content_extensions.keys()])
+    if quick:
+        ext_excludes = '--update ' + ext_excludes
+    os.system(
+        'rsync -a ' + ext_excludes + ' --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
+        % (dirs['content'], dirs['output']))
 
 
 @hookable
@@ -517,12 +461,6 @@ def get_assets_map(conf, datadir):
             elif am.endswith('yaml'):
                 return yaml.safe_load(f)
     return {}
-
-
-@hookable
-def extra_template_vars(template_vars, conf):
-    """Override this to add something to the template_vars."""
-    return
 
 
 def get_dirs(basedir, conf):

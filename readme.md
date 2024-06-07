@@ -269,7 +269,7 @@ content and output. They will be created if they do not exist:
   detail in the "Site, page and nav variables" section. Also take note of the
   `fingerprint` template filter, described in the "Template filters" section.
 
-- `static`: Static files. Everything in here will be rsynced directoy over to
+- `static`: Static files. Everything in here will be rsynced directly over to
   `htdocs`.
 
 <!-- input_formats "Input formats" 45 -->
@@ -281,7 +281,7 @@ if their file extension. The following extensions are recognized by default:
 
 - `.md`, `.mdwn`, `.mdown`, `.markdown`, `.gfm`, `.mmd`: Markdown files.  If
   Pandoc is being used, the input formats `.gfm` and `.mmd` will be assumed to
-  be `gfm` (Github-flavored markdown) and `markdown_mmd` (MultiMarkdown),
+  be `gfm` (GitHub-flavored markdown) and `markdown_mmd` (MultiMarkdown),
   respectively. Note, however, that currently non-YAML metadata given in
   MultiMarkdown format is not picked up automatically in `.mmd` files).
 
@@ -305,7 +305,7 @@ if their file extension. The following extensions are recognized by default:
 
 - `.docbook`: The XML-based DocBook format.
 
-- `.tei`: The Simple variant of the XML-based TEI (Text Encoding Intiative)
+- `.tei`: The Simple variant of the XML-based TEI (Text Encoding Initiative)
   format.
 
 - `.docx`: MS Word DOCX a.k.a. "Office Open XML" format.
@@ -557,7 +557,7 @@ Currently there is support for the following settings:
   of files containing a hash identifier (under the webroot). A typical entry
   might thus map from `/css/style.css` to `/css/style.1234abcdef56.css`. The
   value of this setting is either a dict or the name of a JSON or YAML file
-  (inside the data directory) containg the mapping. It will be available to
+  (inside the data directory) containing the mapping. It will be available to
   templates as `ASSETS_MAP`.
 
 - `assets_fingerprinting`: A boolean indicating whether to automatically
@@ -744,7 +744,7 @@ Mako search path, e.g. `themes/<my-theme>/templates/shortcodes`).
 
 The shortcode itself looks like a function call. Note that positional
 arguments can only be used if the component has an appropriate `<%page>`
-block declaring the exepected arguments.
+block declaring the expected arguments.
 
 The shortcode component will have access to a context composed of (1) the
 parameters directly specified in the shortcode call; (2) the information from
@@ -859,7 +859,7 @@ The following default shortcodes are provided by the `wmk` installation:
   found. The file must be inside the content directory (`CONTENTDIR`), otherwise
   it will not be read. The path is interpreted as relative to the directory in
   which the content file is placed. A path starting with `/` is taken to start
-  at `CONTENTDIR`.  Nested includes are possible but the paths of subincludes
+  at `CONTENTDIR`.  Nested includes are possible but the paths of sub-includes
   are interpreted relative to the original directory (rather than the directory
   in which the included file has been placed). Note that `include()` is always
   handled before other shortcodes.
@@ -938,7 +938,7 @@ When a markdown file (or other supported content) is rendered, the Mako template
 receives a number of context variables as partly described above. A few of these
 variables, such as `MDTEMPLATES` and `DATADIR` set directly by `wmk` (see
 above). Others are user-configured either (1) in `wmk_config.yaml` (the contents
-of the `site` object and potentially additional "global" varaibles in
+of the `site` object and potentially additional "global" variables in
 `template_context`); or (2) the cascade of `index.yaml` files in the `content`
 directory and its subdirectories along with the YAML frontmatter of the markdown
 file itself, the result of which is placed in the `page` object.
@@ -1300,7 +1300,7 @@ Mako, the following filters are by default made available in templates:
   default 'sec', but 'day',  'hour' and 'frac' are also acceptable values); and
   `with_tz` (by default False).
 
-- `date_to_rfc822`: Format a datatime as RFC 822 (a common datetime format in
+- `date_to_rfc822`: Format a datetime as RFC 822 (a common datetime format in
   email headers and some types of XML documents).
 
 - `date_short`: E.g. "7 Nov 2022".
@@ -1614,7 +1614,7 @@ languages will be applied when building the index. The value may be a two-letter
 lowercase country code (ISO-639-1) or a list of such codes. The currently
 accepted languages are `de`, `da`, `en`, `fi`, `fr`, `hu`, `it`, `nl`, `no`,
 `pt`, `ro`, and `ru` (this is the intersection of the languages supported by
-`lunr.js` and NLTK, respecively). The default language is `en`. Attempting to
+`lunr.js` and NLTK, respectively). The default language is `en`. Attempting to
 specify a non-supported language will raise an exception.
 
 The index is built via the [`lunr.py`](https://lunr.readthedocs.io/en/latest/)
@@ -1666,17 +1666,20 @@ before or after them, or can be redefined entirely:
 
 - `binary_to_markdown`
 - `build_lunr_index`
+- `copy_static_files`
 - `doc_with_yaml`
-- `extra_template_vars`
 - `fingerprint_assets`
 - `get_assets_map`
 - `get_content_extensions`
 - `get_content`
 - `get_extra_content`
 - `get_index_yaml_data`
+- `get_mako_lookup`
+- `get_template_vars`
 - `get_templates`
 - `handle_redirects`
 - `index_content`
+- `locale_and_translation`
 - `lunr_summary`
 - `mako_shortcode`
 - `markdown_extensions_settings`
@@ -1743,8 +1746,8 @@ exercise for the reader.
 
 Here is an `__after` hook for `maybe_extra_meta()` which fetches a conference
 schedule (e.g. from from an online calendar) if the `conference_id` key is
-present in the frontmatter.  The retreived information will then be available to
-templates as `page.schedule`.
+present in the frontmatter.  The retrieved information will then be available to
+the templates for that page as `page.schedule`.
 
 ```python
 def maybe_extra_meta__after(meta):
@@ -1752,3 +1755,17 @@ def maybe_extra_meta__after(meta):
         meta['schedule'] = _get_conference_schedule(meta['conference_id'])
     return meta
 ```
+
+A third example: Let's say you want to show information from a few RSS sources
+in a sidebar that will appear on several pages. In order to avoid refetching it
+for each page you can use something like this:
+
+```python
+def get_template_vars__after(template_vars):
+    if 'rss_sources' in template_vars:
+        template_vars['rss_info'] = fetch_rss_feeds(template_vars['rss_sources'])
+    return template_vars
+```
+
+This assumes that you set `rss_sources` in the `template_context` section of
+your `wmk_config.yaml` file.

@@ -36,8 +36,8 @@ The following features are among the ones that set wmk apart:
   export your content to other formats (such as PDF) in addition to HTML, if you
   so wish.
 - Also via Pandoc, support for several non-markdown input formats for content,
-  namely LaTeX, Org, RST, Textile, man, JATS, TEI, Docbook, RTF, DOCX, ODT and
-  EPUB.
+  namely LaTeX, Org, RST, Textile, Djot, Typst, man, JATS, TEI, Docbook, RTF,
+  DOCX, ODT and EPUB.
 
 The only major feature that wmk is missing compared to some other SSGs is tight
 integration with a Javascript assets pipeline and interaction layer. Although
@@ -297,9 +297,13 @@ if their file extension. The following extensions are recognized by default:
 
 - `.textile`: Textile markup format.
 
+- `.dj`: The Djot lightweight markup format.
+
 - `.man`: Roff man format.
 
 - `.rtf`: Rich Text Format (RTF).
+
+- `.typ`: Typst format.
 
 - `.jats`, `.xml`: The XML-based JATS (Journal Article Tag Suite) format.
 
@@ -315,7 +319,8 @@ if their file extension. The following extensions are recognized by default:
 - `.epub`: The EPUB e-book format.
 
 Pandoc is turned on automatically for all non-markdown, non-HTML formats in the
-above list.  In order to use such content, Pandoc therefore *must* be installed.
+above list.  In order to use such content, a sufficiently recent version of
+Pandoc therefore *must* be installed.
 
 The list of input formats and how they are handled is configurable through the
 `content_extensions` setting in the config file.

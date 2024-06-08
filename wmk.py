@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.8.6'
+VERSION = '1.8.7'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -50,10 +50,12 @@ DEFAULT_CONTENT_EXTENSIONS = {
     # pandoc-only formats below
     '.org': {'pandoc': True, 'pandoc_input_format': 'org'},
     '.rst': {'pandoc': True, 'pandoc_input_format': 'rst'},
+    '.dj': {'pandoc': True, 'pandoc_input_format': 'djot'},
+    '.textile': {'pandoc': True, 'pandoc_input_format': 'textile'},
     '.tex': {'pandoc': True, 'pandoc_input_format': 'latex'},
+    '.typ': {'pandoc': True, 'pandoc_input_format': 'typst'},
     '.man': {'pandoc': True, 'pandoc_input_format': 'man'},
     '.rtf': {'pandoc': True, 'pandoc_input_format': 'rtf'},
-    '.textile': {'pandoc': True, 'pandoc_input_format': 'textile'},
     '.xml': {'pandoc': True, 'pandoc_input_format': 'jats'},
     '.jats': {'pandoc': True, 'pandoc_input_format': 'jats'},
     '.tei': {'pandoc': True, 'pandoc_input_format': 'tei'},

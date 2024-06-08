@@ -11,7 +11,7 @@
 # is visible to the outside.
 
 # Base image
-FROM python:3.11.3-slim-bullseye
+FROM python:3.11.9-slim-bookworm
 
 # Preliminaries
 WORKDIR /
@@ -22,9 +22,9 @@ RUN apt-get -q update \
 # Install pandoc.
 # This may be omitted if you are not planning to use wmk's Pandoc options
 RUN wget --quiet \
-    https://github.com/jgm/pandoc/releases/download/3.1.2/pandoc-3.1.2-1-amd64.deb \
-  && dpkg -i pandoc-3.1.2-1-amd64.deb \
-  && rm -f pandoc-3.1.2-1-amd64.deb
+    https://github.com/jgm/pandoc/releases/download/3.2/pandoc-3.2-1-amd64.deb \
+  && dpkg -i pandoc-3.2-1-amd64.deb \
+  && rm -f pandoc-3.2-1-amd64.deb
 
 # Install wmk
 RUN git clone https://github.com/bk/wmk

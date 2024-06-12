@@ -1,5 +1,8 @@
 <%page args="match_expr, exclude_expr=None, ordering=None, limit=None, template=None, fallback='', template_args=None, sql_match=False" />\
 <%!
+from mako.template import Template
+import wmk_mako_filters
+tpl_import = 'from wmk_mako_filters import ' + ', '.join(wmk_mako_filters.__all__)
 def pagelist_handler(match_expr, exclude_expr, ordering, limit, template, fallback, nth, lookup, template_args, sql_match):
     placeholder = '((PAGELIST::%d))' % nth
     def cb(html, **data):
@@ -12,7 +15,7 @@ def pagelist_handler(match_expr, exclude_expr, ordering, limit, template, fallba
             found = found.page_match(exclude_expr, ordering, limit, inverse=True)
         repl = fallback
         if found and template:
-            tpl = lookup.get_template(template)
+            tpl = Template(text=template, lookup=lookup, imports=[tpl_import]) if "\n" in template else lookup.get_template(template)
             repl = tpl.render(pagelist=found, **template_args)
         elif found:
             repl = '<ul class="pagelist">'

@@ -136,6 +136,41 @@ class MDContentList(list):
         "Filter by Markdown body"
         return MDContentList([_ for _ in self if pred(_['doc'])])
 
+    def group_by(self, pred, normalize=None, keep_empty=False):
+        """
+        Group items in an MDContentList using a given criterion.
+
+        - `pred`: A callable receiving a content item and returning a string or
+          a list of strings. For convenience, `pred` may also be specified as
+          a string and is then interpreted as the value of the named `page`
+          variable, e.g. `category`.
+        - `normalize`: a callable that transforms the grouping values, e.g.
+          to lowercase.
+        - `keep_empty`: Normally items are omitted if their predicate evaluates
+          to the empty string. This can be overridden by setting this to True.
+
+        Returns a dict whose keys are strings and whose values are MDContentList
+        instances.
+        """
+        if isinstance(pred, str):
+            pagekey = pred
+            pred = lambda x: x['data']['page'].get(pagekey, '')
+        found = {}
+        for it in self:
+            keys = pred(it)
+            if not isinstance(keys, list):
+                keys = [keys]
+            if normalize:
+                keys = list(set([normalize(_) for _ in keys]))
+            for k in keys:
+                if not k and not keep_empty:
+                    continue
+                if k in found:
+                    found[k].append(it)
+                else:
+                    found[k] = MDContentList([it])
+        return found
+
     def sorted_by(self, key, reverse=False, default_val=-1):
         if isinstance(default_val, str):
             k = lambda x: locale.strxfrm(

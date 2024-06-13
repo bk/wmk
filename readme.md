@@ -598,7 +598,7 @@ Currently there is support for the following settings:
 - `lunr_languages`: A two-letter language code or a list of such codes,
   indicating which language(s) to use for stemming when building a Lunr index.
   The default language is `en`. For more on this,
-  see the "Site search using Lunr" section below.
+  see the "Site search" section below.
 
 - `http`: This is is a dict for configuring the address used for `wmk serve`.
   It may contain either or both of two keys: `port` (default: 7007) and `ip`
@@ -1475,8 +1475,8 @@ All of these return a new `MDContentList` object (at least by default).
   files at the top. The `limit`, if specified, obviously indicates the maximum
   number of pages to return.
 
-- `page_match_sql()`, `get_db()`, `get_db_columns()` – see "Searching/filtering
-  using SQL" below.
+- `page_match_sql()`, `get_db()`, `get_db_columns()` –
+  see "Searching/filtering using SQL" below.
 
 A `match_expr` for `page_match()` is either a dict or a list of dicts.  If it is
 a dict, each page in the result set must match each of the attributes specified
@@ -1634,9 +1634,17 @@ Typical usage of `write_to()`:
 % endif
 ```
 
-<!-- lunr "Site search using Lunr" 140 -->
+<!-- site_search "Site search" 140 -->
 
-## Site search using Lunr
+## Site search
+
+### Using Lunr
+
+Lunr is the only search solution "natively" supported by `wmk`. That being said,
+implementing site search is not a simple matter of turning lunr indexing on. It
+takes a bit of work by the author of the site or theme templates, so depending
+on your needs it may even be easier to base your search functionality on another
+solution.
 
 With `lunr_index` (and optionally `lunr_index_fields`) in `wmk_config.yaml`, wmk
 will build a search index for [Lunr.js](https://lunrjs.com/) and place it in
@@ -1661,15 +1669,7 @@ Toolkit](https://www.nltk.org/).
 For information about the supported syntax of the search expression, see the
 [Lunr documentation](https://lunrjs.com/guides/searching.html).
 
-Note that because Lunr creates a single index file for the whole site, it may
-not be a practical  option for large sites with lots of content – a realistic
-limit may be somewhere around 1,000 pages or so. In such a case, you may want to
-consider using solutions that break the index up into smaller chunks, such as
-[Pagefind](https://pagefind.app/). Alternatively, you should look into a
-server-side or hosted solution such as [Algolia](https://www.algolia.com/) or
-[Meilisearch](https://www.meilisearch.com/).
-
-### Limitations
+### Limitations of Lunr
 
 - Building the index does not mean that the search functionality is complete. It
   remains to point to `lunr.js` in the templates and write some javascript to
@@ -1687,6 +1687,81 @@ server-side or hosted solution such as [Algolia](https://www.algolia.com/) or
   this is that the binary input formats (DOCX, ODT, EPUB) are converted to
   markdown before being indexed. The output of Mako templates (including
   shortcodes called from the content documents) is not indexed either.
+
+- Because Lunr creates a single index file for the whole site, it may not be a
+  practical  option for large sites with lots of content – a realistic
+  limit may be somewhere around 1,000 pages or so. Some other client-side
+  search solutions break the index into smaller chunks and may therefore be a
+  viable option for such sites.
+
+### Overview of alternative solutions
+
+If you are looking for an alternative to lunr, the first thing to consider is
+whether a server-based solution is needed or whether a Javascript-based
+client-side solution would be enough.
+
+If the site has a lot of text (more than 200,000 words or so) or if it needs to
+work even without Javascript, then a server-based solution is required. You then
+need to decide whether you want to self-host it or if you are ready to pay for a
+third-party hosted solution.  [Meilisearch](https://www.meilisearch.com/) is
+open source and allows for self-hosting (although a hosted solution called
+Meilisearch Cloud is also available), while the market leader in hosted site
+search is probably [Algolia](https://www.algolia.com/).
+
+If, however, a client-side Javascript solution is sufficient, there are several
+alternatives to lunr that could come into consideration, e.g.
+[Pagefind](https://pagefind.app/),
+[Tinysearch](https://github.com/tinysearch/tinysearch),
+[Elasticlunr](http://elasticlunr.com/) or [Stork](https://stork-search.net/).
+
+Whichever solution is picked, you of course need to add the required HTML, CSS
+and Javascript to the templates for the search functionality to work. You also
+need to take care of updating the search index whenever the site is built.
+
+Assuming you have opted not to use the built-in lunr support, the index
+creation/updating step can basically be implemented in two ways:
+
+1. By running after the build step has finished via a `cleanup_commands` entry
+   in `wmk_config.yaml`. This calls a script or another external program which
+   can update the index based on either the HTML in the output folder or the
+   JSON file specified using the `mdcontent_json` configuration option.
+
+2. By implementing a hook function in `wmk_hooks.py` (or `wmk_theme_hooks.py`),
+   most likely for `post_build_actions()` or `index_content()`;
+   see the "Overriding and extending wmk via hooks" section below.
+
+### Example: Pagefind
+
+Taking Pagefind as an example of the steps described above, you would, per [their
+documentation](https://pagefind.app/docs/), add something similar to this to
+your templates in an appropriate location:
+
+```html
+<link href="/pagefind/pagefind-ui.css" rel="stylesheet">
+<script src="/pagefind/pagefind-ui.js"></script>
+<div id="search"></div>
+<script>
+    window.addEventListener('DOMContentLoaded', (event) => {
+        new PagefindUI({ element: "#search", showSubResults: true });
+    });
+</script>
+```
+
+It would also be a good idea to make sure you modify all base templates so as to
+identify the main part of each page [with the `data-pagefind-body`
+attribute](https://pagefind.app/docs/indexing/) and thus omit repeated
+elements such as navigation and footer from the index.
+
+Finally, in order to actually create or update the search index whenever the
+site is built, you would need to add the following to the `wmk_config.yaml` file:
+
+```yaml
+cleanup_commands:
+  - "npx -y pagefind --site htdocs"
+```
+
+This obviously assumes that you have [npm](https://www.npmjs.com/) installed on
+your system.
 
 <!-- hooks "Overriding and extending wmk via hooks" 150 -->
 
@@ -1726,6 +1801,7 @@ before or after them, or can be redefined entirely:
 - `pandoc_extra_formats`
 - `pandoc_metadata`
 - `parse_dates`
+- `post_build_actions`
 - `postprocess_html`
 - `preferred_date`
 - `process_assets`

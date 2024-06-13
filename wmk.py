@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.9'
+VERSION = '1.9.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -163,6 +163,7 @@ def main(basedir=None, quick=False):
     process_markdown_content(content, lookup, conf, force)
     # 8) Cleanup/external post-processing stage
     if not quick:
+        post_build_actions(conf, dirs, templates, content)
         run_cleanup_commands(conf, basedir)
 
 
@@ -421,6 +422,16 @@ def copy_static_files(dirs, themedir, conf, quick=False):
     os.system(
         'rsync -a ' + ext_excludes + ' --exclude "*.yaml" --exclude "_*" --exclude ".*" --prune-empty-dirs "%s/" "%s/"'
         % (dirs['content'], dirs['output']))
+
+
+@hookable
+def post_build_actions(conf, dirs, templates, content):
+    """
+    This is the hookable you would override for updating a search index
+    (e.g. if you are not using lunr and want to have the option of indexing the
+    output of stand-alone templates). By default, it just calls index_content().
+    """
+    index_content(content, conf, dirs['content'])
 
 
 @hookable
@@ -1147,7 +1158,11 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
         template_vars=template_vars, conf=conf)
     content = MDContentList(content)
     template_vars['MDCONTENT'] = content
-    index_content(content, conf, ctdir)
+    # We must call this before adding MDCONTENT to each item below
+    # (thus creating circular refences):
+    maybe_save_mdcontent_as_json(content, conf, os.path.split(ctdir)[0])
+    for it in content:
+        it['data']['MDCONTENT'] = content
     return content
 
 
@@ -1168,9 +1183,7 @@ def get_extra_content(
 
 @hookable
 def index_content(content, conf, ctdir):
-    maybe_save_mdcontent_as_json(content, conf, os.path.split(ctdir)[0])
-    for it in content:
-        it['data']['MDCONTENT'] = content
+    "Build lunr index if applicable."
     if conf.get('lunr_index', False):
         build_lunr_index(content,
                          conf.get('lunr_index_fields', None),

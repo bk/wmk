@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.9.1'
+VERSION = '1.10'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -242,7 +242,7 @@ def get_template_vars(dirs, themedir, conf, assets_map=None):
     }
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
-    template_vars['nav'] = Nav(conf.get('nav', []))
+    template_vars['nav'] = get_nav(conf, dirs, themedir)
     # b) Locale/translation related
     # site.locale affects collation; site.lang affects translations
     locale_and_translation(template_vars, themedir)
@@ -260,6 +260,64 @@ def get_template_vars(dirs, themedir, conf, assets_map=None):
     template_vars['site'].build_time = datetime.datetime.now()
     template_vars['site'].lunr_search = conf.get('lunr_index', False)
     return template_vars
+
+
+@hookable
+def get_nav(conf, dirs=None, themedir=None):
+    conf_nav = conf.get('nav', [])
+    if isinstance(conf_nav, str) and conf_nav == 'auto':
+        return Nav([]) # will be generated from content later
+    else:
+        return Nav(conf_nav)
+
+
+@hookable
+def auto_nav_from_content(content):
+    """
+    Automatically generate a simple nav from frontmatter. Called if conf.nav is
+    set to 'auto'.
+
+    Each added page MUST have nav_section and MAY have nav_title (which
+    fallbacks to title) and nav_order (which fallbacks to weight or defaults to
+    2**32-1 if that fails).
+
+    Sections are ordered by the smallest weight assigned to them, with the Root
+    section always being placed at the start. Non-Root sections with the same
+    weight are ordered alphabetically. Page links within each seaction
+    are ordered by nav_order/weight, or, if that is equal, by nav_title/title.
+    """
+    autonav = []
+    root_section = []
+    sections = {}
+    fallback_weight = 2**32 - 1
+    for it in content:
+        pg = it['data']['page']
+        if not pg.nav_section:
+            continue
+        item_weight = pg.nav_order or pg.weight or fallback_weight
+        rec = {
+            'title': pg.nav_title or pg.title,
+            'url': it['url'],
+            'order': item_weight,
+        }
+        if pg.nav_section.lower() == 'root':
+            root_section.append(rec)
+        elif pg.nav_section not in sections:
+            sections[pg.nav_section] = {'weight': item_weight, 'items': [rec]}
+        else:
+            sections[pg.nav_section]['items'].append(rec)
+            if sections[pg.nav_section]['weight'] > item_weight:
+                sections[pg.nav_section]['weight'] = item_weight
+    sortkey = lambda x: (x['order'], x['title'])
+    root_section.sort(key=sortkey)
+    for it in root_section:
+        autonav.append({it['title']: it['url']})
+    for section in sorted(list(sections.keys()), key=lambda x: (sections[x]['weight'], x)):
+        items = []
+        for it in sorted(sections[section]['items'], key=sortkey):
+            items.append({it['title']: it['url']})
+        autonav.append({section: items})
+    return Nav(autonav)
 
 
 @hookable
@@ -499,11 +557,43 @@ def get_dirs(basedir, conf):
 
 def get_config(basedir, conf_file):
     filename = os.path.join(basedir, conf_file)
+    conf_dir = os.path.join(basedir, 'data', conf_file.replace('.yaml', '.d'))
     conf = {}
     if os.path.exists(filename):
         with open(filename) as f:
            conf = yaml.safe_load(f) or {}
+    # Look for yaml files inside data/wmk_config.d.  Each file contains the
+    # value for the key specified by the path name to it, e.g. ./site/info.yaml
+    # contains the value of site.data. (The contents of ./site.yaml, if present,
+    # is merged with the contents of the files inside the ./site/ directory).
+    if os.path.isdir(conf_dir):
+        dirconf = {}
+        for root, dirs, fils in os.walk(conf_dir):
+            nesting = root[len(conf_dir)+1:]
+            pathkeys = [_ for _ in nesting.split('/') if _]
+            for fn in fils:
+                if not fn.endswith('.yaml'):
+                    continue
+                filkey = fn.replace('.yaml', '')
+                with open(os.path.join(root, fn)) as f:
+                    partial = yaml.safe_load(f) or {}
+                    _ensure_nested_dict(dirconf, pathkeys, filkey, partial)
+        for k in dirconf:
+            if k in conf and isinstance(conf[k], dict):
+                conf[k].update(dirconf[k])
+            else:
+                conf[k] = dirconf[k]
     return conf
+
+
+def _ensure_nested_dict(dic, keylist, key, val=None):
+    # Helper function for get_config.
+    for k in keylist:
+        dic = dic.setdefault(k, {})
+    if key in dic and isinstance(dic[key], dict) and isinstance(val, dict):
+        dic[key].update(val)
+    else:
+        dic[key] = val
 
 
 @hookable
@@ -1158,8 +1248,14 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
         template_vars=template_vars, conf=conf)
     content = MDContentList(content)
     template_vars['MDCONTENT'] = content
+    if not template_vars['nav'] and isinstance(conf.get('nav'), str) and conf['nav'] == 'auto':
+        autonav = auto_nav_from_content(content)
+        if autonav:
+            template_vars['nav'] = autonav
+            for ct in content:
+                ct['data']['nav'] = autonav
     # We must call this before adding MDCONTENT to each item below
-    # (thus creating circular refences):
+    # (since that will create circular references):
     maybe_save_mdcontent_as_json(content, conf, os.path.split(ctdir)[0])
     for it in content:
         it['data']['MDCONTENT'] = content

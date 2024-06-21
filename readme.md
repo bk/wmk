@@ -713,7 +713,7 @@ handled by Pandoc.
 
 ## Available themes
 
-Currently there are five wmk themes available:
+Currently there are six wmk themes available:
 
 - [Lanyonesque][lanyonesque], a blog-oriented theme based on the Jekyll theme
   [Lanyon][lanyon]. [Demo][ldemo].
@@ -725,6 +725,9 @@ Currently there are five wmk themes available:
   template that accompanies the [PicoCSS][pico] documentation. [Demo][pdemo].
 
 - [WDocs], a full-featured documentation theme. [Demo][wdemo].
+
+- [Walto], a more lightweight documentation theme. The [wmk documentation
+  site](https://wmk.baldr.net/) uses Walto.
 
 - [Birta], the theme used for [bornogtonlist.net](https://www.bornogtonlist.net/)
 
@@ -742,6 +745,7 @@ Currently there are five wmk themes available:
 [WDocs]: https://github.com/bk/wdocs-theme
 [wdemo]: https://wdocs.baldr.net/
 [Birta]: https://github.com/bk/birta-theme/
+[Walto]: https://github.com/bk/walto/
 
 <!-- shortcodes "Shortcodes" 100 -->
 

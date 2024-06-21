@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.10'
+VERSION = '1.10.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -557,7 +557,7 @@ def get_dirs(basedir, conf):
 
 def get_config(basedir, conf_file):
     filename = os.path.join(basedir, conf_file)
-    conf_dir = os.path.join(basedir, 'data', conf_file.replace('.yaml', '.d'))
+    conf_dir = os.path.join(basedir, conf_file.replace('.yaml', '.d'))
     conf = {}
     if os.path.exists(filename):
         with open(filename) as f:

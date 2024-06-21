@@ -457,16 +457,17 @@ variable setting) exists in the theme directory, then any settings in that file
 will be merged with the main config – unless `ignore_theme_conf` is true.
 
 It is also possible to split the configuration file up into several smaller
-files. These are placed in the `data/wmk_config.d/` directory. The filename of
-each yaml file in that directory (minus the `.yaml` extension) is treated as a
-key and the contents as its value. Subdirectories can be used to represent a
-nested structure. For instance, the file
-`data/wmk_config.d/site/colors/darkmode.yaml` would contain the settings that
+files. These are placed in the `wmk_config.d/` directory (inside the base
+directory). The filename of each yaml file in that directory (minus the `.yaml`
+extension) is treated as a key and the contents as its value. Subdirectories can
+be used to represent a nested structure. For instance, the file
+`wmk_config.d/site/colors/darkmode.yaml` would contain the settings that
 will be visible to templates as the `site.colors.darkmode` variable.
 Note that the `WMK_CONFIG` environment variable affects the name of the
-directory looked for inside `data/`; setting it to `myconf.yaml` would e.g.
-mean that `wmk` will inspect `data/myconf.d/` for extra configuration settings
-instead of `data/wmk_config.d/`.
+directory looked for; setting it to `myconf.yaml` would e.g.  mean that `wmk`
+will inspect `myconf.d/` for extra configuration settings instead of
+`wmk_config.d/` (although this does not apply to themes, whose configuration
+file/directory name is fixed).
 
 Currently there is support for the following settings:
 

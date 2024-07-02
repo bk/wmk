@@ -1329,6 +1329,9 @@ def process_content_item(
                         page[k] = loaded
             except Exception as e:
                 print("LOAD ERROR FOR %s: %s" % (fn, e))
+    # Check if we're inheriting a draft setting -- if so, skip out
+    if page.get('draft', False) and not conf.get('render_drafts', False):
+        return
     # template
     template = page.get(
         'template', data.get(

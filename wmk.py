@@ -1205,8 +1205,12 @@ def get_content(ctdir, datadir, outputdir, template_vars, conf,
             ext = re.findall(r'\.\w+$', fn)[0]
             ext_conf = content_extensions[ext]
             if ext_conf.get('is_binary'):
-                meta, doc = binary_to_markdown(
-                    source_file, ext_conf.get('pandoc_binary_format'), datadir[:-5])
+                try:
+                    meta, doc = binary_to_markdown(
+                        source_file, ext_conf.get('pandoc_binary_format'), datadir[:-5])
+                except RuntimeError as e:
+                    print("ERROR: Could not convert {} using pandoc: {}".format(source_file, e))
+                    continue
                 for k in ext_conf:
                     if not k in meta:
                         meta[k] = ext_conf[k]

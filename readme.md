@@ -918,6 +918,7 @@ The following default shortcodes are provided by the `wmk` installation:
   `ordering` and `limit` will be passed to `page_match_sql()` (as
   `where_clause`, `order_by`, and `limit`, respectively) rather than to
   `page_match()`.
+
 - `resize_image`: Scales and crops images to a specified size. Required
   arguments: `path`, `width`, `height`. Optional arguments: `op` ('fit_width',
   'fit_height', 'fit', 'fill'; the last is the default), `format` ('jpg' or
@@ -925,7 +926,7 @@ The following default shortcodes are provided by the `wmk` installation:
   `focal_point` (default `center`; only used for `op='fill'`).
   Returns a path under `/resized_images/` (possibly prefixed with the value of
   `site.leading_path`) pointing to the resized version of the image.  The
-  filename is a SHA1 hash + an extension, so repeated requests for the same
+  filename incorporates a SHA1 hash, so repeated requests for the same
   resize operation are only performed once.  The source `path` is taken to be
   relative to the `WEBROOT`, i.e. the project `htdocs` directory.
 

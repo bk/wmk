@@ -53,13 +53,19 @@ hash = sha1('::'.join(
     [path, str(width), str(height), op, format,
      str(quality), str(focal_point)]).encode('utf-8')).hexdigest()
 sizedir = '%sx%s' % (str(width or ''), str(height or ''))
-dest = '/resized_images/' + sizedir + '/' + hash + '.' + format
+full_dir, fn = os.path.split(full_path)
+ext = '.' + format
+if not fn.endswith(ext):
+    fn += ext
+bucket = hash[:2]
+fn = hash + '-' + fn
+dest = '/resized_images/' + sizedir + '/' + bucket + '/' + fn
 target_path = os.path.join(context.get('site_leading_path', ''), dest.strip('/'))
 if not target_path.startswith('/'):
     target_path = '/' + target_path
 full_dest = os.path.join(webroot, dest.strip('/'))
 if not os.path.exists(full_dest):
-    target_dir = os.path.join(webroot, 'resized_images', sizedir)
+    target_dir = os.path.split(full_dest)[0]
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
     im = Image.open(full_path)

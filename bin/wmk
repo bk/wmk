@@ -29,14 +29,20 @@ fi
 if [ "$ACTION" = "--version" ]; then
     "$WMK_HOME/wmk.py" "--version"
     exit
+elif [ "$ACTION" = "pip" ]; then
+    $*
+    exit
+elif [ "$ACTION" = "homedir" ]; then
+    echo $WMK_HOME
+    exit
 fi
+
 if [ "$ACTION" = "preview" ]; then
     PREVIEWFILE="$3"
 fi
 if [[ "$ACTION" = "preview" && "$3" != "" ]]; then
     ADMIN_SUBDIR="$3"
 fi
-
 
 
 while [[ "$#" -gt 0 ]]; do
@@ -96,6 +102,8 @@ usage(){
     echo "  wmk info|env|debug <dirname>"
     echo "  wmk clear-cache <dirname>"
     echo "  wmk repl <dirname>"
+    echo "  wmk pip <pip-command>"
+    echo "  wmk homedir"
     echo "Action abbreviations: "
     echo "  b|r|run=build; w=watch; s=serve; ws=watch-serve; c=clear-cache"
     echo "See $WMK_HOME/readme.md for documentation"

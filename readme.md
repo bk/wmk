@@ -192,6 +192,13 @@ see the "File organization" section below).
   wmk import get_content_info`, followed by `content = get_content_info('.')` is
   often a good start.
 
+- `wmk pip <pip-command>`: Run `pip` in the virtual environment used by wmk.
+  Mainly useful for installing or upgrading Python modules that you want to use
+  in Python files belonging to your projects.
+
+- `wmk homedir`: Outputs the path to `wmk`'s installation directory. May be
+  useful in shell scripts.
+
 <!-- organization "File organization" 40 -->
 
 ## File organization

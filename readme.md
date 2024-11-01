@@ -17,18 +17,18 @@ might almost call them standard:
 
 The following features are among the ones that set wmk apart:
 
-- The content is rendered using [Mako][mako], a template system which makes all
-  the resources of Python easily available to you.
+- By default, the content is rendered using [Mako][mako], a template system
+  which makes all the resources of Python easily available to you. However
+  [Jinja2][jinja] templates are also supported if that is what you prefer.
 - "Stand-alone" templates – i.e. templates that are not used for presenting
   markdown-based content – are also rendered if present. This can e.g. be used
   for list pages or content based on external sources (such as a database).
 - Additional data for the site may be loaded from separate YAML files ­ or even
   (with a small amount of Python/Mako code) from other data sources such as CSV
   files, SQL databases or REST/graphql APIs.
-- The shortcode system is considerably more powerful than that of most static
-  site generators. For instance, among the default shortcodes are an image
-  thumbnailer and a page list component. A shortcode is just a Mako component,
-  so if you know some Python you can easily build your own.
+- The shortcode system is quite powerful and flexible. For instance, among the
+  default shortcodes are an image thumbnailer and a page list component. A
+  shortcode is just a template, so you can easily build your own.
 - Optional support for the powerful [Pandoc][pandoc] document converter, for the
   entire site or on a page-by-page basis. This gives you access to such features
   as LaTeX math markup and academic citations, as well as to Pandoc's
@@ -46,11 +46,12 @@ nevertheless means that if your site is reliant upon React, Vue or similar, then
 other options are probably more convenient.
 
 That exception aside, wmk is suitable for building any small or medium-sized
-static website (up to a few hundred pages).
+static website (up to a couple of thousand pages, depending on the content).
 
 [libsass]: https://sass.github.io/libsass-python/
 [lunr]: https://lunrjs.com/
 [mako]: https://www.makotemplates.org/
+[jinja]: https://jinja.palletsprojects.com/
 [pandoc]: https://pandoc.org/
 
 <!-- installation "Installation" 20 -->
@@ -173,7 +174,7 @@ see the "File organization" section below).
 
 - `wmk preview $basedir $filename` where `$filename` is the name of a file relative
   to the `content` subdirectory of `$basedir`. This prints (to stdout) the HTML
-  which the given file will be converted to (before it is passed to the Mako
+  which the given file will be converted to (before it is passed to the
   template and before potential post-processing). Example: `wmk preview .
   index.md`.
 
@@ -182,8 +183,9 @@ see the "File organization" section below).
   `$basedir` (or into the subdirectory specified with `wmk admin $basedir $subdir`).
   The subdirectory may be a symbolic link pointing to a central instance.
   wmkAdmin allows you to manage the content of the site via a web interface. It
-  is not designed to allow you to alter the Mako templates, install themes or
-  perform other tasks that require more technical knowledge.
+  is not designed to allow you to install or modify themes or perform tasks that
+  require more technical knowledge, and works best for a standard site based on
+  Markdown or HTML files in the `content` directory.
 
 - `wmk repl $basedir`: Launch a Python shell (ipython, bpython or python3, in
   order of preference) with the wmk environment loaded and with the `$basedir`
@@ -209,13 +211,15 @@ content and output. They will be created if they do not exist:
 - `htdocs`: The output directory. Rendered, processed or copied content is
   placed here, and `wmk serve` will serve files from this directory.
 
-- `templates`: Mako templates. Templates with the extension `.mhtml` are
-  rendered directly into `htdocs` as `.html` files (or another extension if the
-  filename ends with `.$ext\.mhtml`, where `$ext` is a string consisting of 2-4
-  alphanumeric characters), unless their filename starts with a dot or
-  underscore or contains the string `base`, or if they are directly inside a
-  subdirectory named `base`. For details on context variables received by such
-  stand-alone templates, see the "Context variables" section below.
+- `templates`: Mako templates (or Jinja2 templates if `jinja2_templates` is set
+  to true in `wmk_config.yaml`). Templates with the extension `.mhtml` (`.html`
+  if Jinja2 templates are being used) are rendered directly into `htdocs` as
+  `.html` files (or another extension if the filename ends with
+  `.$ext\.mhtml`/`$ext\.html`, where `$ext` is a string consisting of 2-4
+  alphanumeric characters), *unless* their filename starts with a dot or
+  underscore or contains the string `base`, or if they are inside a subdirectory
+  named `base`. For details on context variables received by such stand-alone
+  templates, see the "Context variables" section below.
 
 - `content`: typically markdown (`*.md`) and/or HTML (`*.html*`) content with YAML
   metadata, although other formats are also supported. For a full list,
@@ -241,7 +245,7 @@ content and output. They will be created if they do not exist:
     or the name of the file itself is `index.md` or `index.html` (in which case
     the relative path is remains the same, except that the extension is of
     course changed to `.html` if the source is a markdown file).
-  - The processed content will be passed to the Mako template as a string in the
+  - The processed content will be passed to the template as a string in the
     context variable `CONTENT`, along with other metadata.
   - A YAML datasource can be specified in the metadata block as `LOAD`; the data
     in this file will be added to the context. For further details on the
@@ -256,17 +260,18 @@ content and output. They will be created if they do not exist:
   typically also be placed here.
 
 - `py`: Directory for Python files. This directory is automatically added to the
-  front of `sys.path` before Mako is initialized, meaning that Mako templates
-  can import modules placed here. Implicit imports are possible by setting
-  `mako_imports` in the config file (see the "Configuration file" section).
-  There are also two special files that may be placed here: `wmk_autolaod.py` in
-  your project, and `wmk_theme_autoload.py` in the theme's `py/` directory.  If
-  one or both of these is present, wmk imports a dict named `autoload` from
-  them. This means that you can assign `PREPROCESS` and `POSTPROCESS` page
-  actions by name (i.e. keys in the `autoload` dict) rather than as function
-  references, which in turn makes it possible to specify them in the frontmatter
-  directly rather than having to do it via a shortcode. (For more on `PRE-` and
-  `POSTPROCESS`, see the "Site, page and nav variables" section).
+  front of `sys.path` before Mako or Jinja2 is initialized, meaning that templates
+  can import modules placed here. Implicit imports (for Mako only) are possible
+  by setting `mako_imports` in the config file (see the "Configuration file"
+  section).  There are also two special files that may be placed here:
+  `wmk_autolaod.py` in your project, and `wmk_theme_autoload.py` in the theme's
+  `py/` directory.  If one or both of these is present, wmk imports a dict named
+  `autoload` from them. This means that you can assign `PREPROCESS` and
+  `POSTPROCESS` page actions by name (i.e. keys in the `autoload` dict) rather
+  than as function references, which in turn makes it possible to specify them
+  in the frontmatter directly rather than having to do it via a shortcode. (For
+  more on `PRE-` and `POSTPROCESS`, see the "Site, page and nav variables"
+  section).
 
 - `assets`: Assets for an asset pipeline. The only default handling of assets
   involves compiling SCSS/Sass files in the subdirectory `scss`. They will be
@@ -362,7 +367,7 @@ When creating a website with wmk, you might want to keep the following things in
 mind lest they surprise you:
 
 * The order of operations is as follows: (1) Copy files from `static/`; (2) run
-  asset pipeline; (3) render Mako templates from `templates`; (4) render
+  asset pipeline; (3) render standalone templates from `templates`; (4) render
   markdown content from `content`. As a consequence, later steps **may
   overwrite** files placed by earlier steps. This is intentional but definitely
   something to keep in mind.
@@ -388,7 +393,7 @@ mind lest they surprise you:
 
 ## Context variables
 
-The Mako templates, whether they are stand-alone or being used to render
+The Mako/Jinja2 templates, whether they are stand-alone or being used to render
 markdown (or other) content, receive the following context variables:
 
 - `DATADIR`: The full path to the `data` directory.
@@ -407,8 +412,8 @@ markdown (or other) content, receive the following context variables:
   variables seen by this content), `doc` (the raw content document source), and `url`
   (the `SELF_URL` value for this content – see below). Note that `MDCONTENT` is
   not available inside shortcodes.  An `MDContentList` is a list object with
-  some convenience methods for filtering and sorting. It is described at the end
-  of this Readme file.
+  some convenience methods for filtering and sorting. It will be described
+  further later on.
 - Whatever is defined under `template_context` in the `wmk_config.yaml` file
   (see the "Configuration file" section below).
 - `SELF_URL`: The relative path to the HTML file which the output of the
@@ -417,8 +422,21 @@ markdown (or other) content, receive the following context variables:
   root).
 - `ASSETS_MAP`: A map of fingerprinted assets (such as javascript or css files),
   used by the `fingerprint` template filter.
+- `LOADER`: The template loader/env. In the case of Mako, this is a
+  `TemplateLookup` object; in the case of Jinja2 this is an `Environment`
+  object with a `FileSystemLoader` loader.
 - `site`: A dict-like object containing the variables specified under the `site`
   key in `wmk_config.yaml`.
+
+In the case of Jinja2 templates, three extra context variables are available:
+
+- `mako_lookup`: A Mako `TemplateLookup` instance which makes it possible to call
+  Mako templates from a Jinja2 template.
+- `get_context`: A function returning all context variables as a dict.
+- `imp0rt`: A function which can be used to import a Python module into a Jinja
+  template, e.g. `{% set utils = imp0rt('my_utils') %}`. The main intent is to
+  make code inside the project `py/` subdirectory as easily available in Jinja
+  templates as it is in Mako templates.
 
 When templates are rendering markdown (or other) content, they additionally get
 the following context variables:
@@ -439,7 +457,6 @@ the following context variables:
   which depend on other markdown content which itself may contain shortcodes.
   The callable receives a dict containing the keys `doc` (the markdown) and
   `data` (the context variables) and returns rendered HTML.
-- `LOOKUP`: The Mako `TemplateLookup` object.
 - `page`: A dict-like object containing the variables defined in the YAML meta
   section at the top of the markdown file, in `index.yaml` files in the markdown
   file directory and its parent directories inside `content`, and possibly in
@@ -478,7 +495,7 @@ file/directory name is fixed).
 
 Currently there is support for the following settings:
 
-- `template_context`: Default values for the context passed to Mako templates.
+- `template_context`: Default values for the context passed to templates.
   This should be a dict.
 
 - `site`: Values for common information relating to the website. These are also
@@ -647,11 +664,18 @@ Currently there is support for the following settings:
 - `ignore_theme_conf`: If set to true in the main configuration file, this tells
   wmk to ignore any settings in `wmk_config.yaml` in the theme directory.
 
-- `extra_template_dirs`: A list of directories in which to look for Mako
-  templates. These are placed after both `$basedir/templates` and theme-provided
-  templates in the Mako search path. This makes it possible to build up a
-  library of Mako components which can be easily used on multiple sites and
+- `extra_template_dirs`: A list of directories in which to look for template
+  files. These are placed after both `$basedir/templates` and theme-provided
+  templates in the template engine search path. This makes it possible to build
+  up a library of components which can be easily used on multiple sites and
   across different themes.
+
+- `jinja2_templates`: If this boolean setting is true, it indicates that the
+  template files in the `template` directory (and supplied by the theme, or
+  otherwise in the template engine search path) are to be interpreted by Jinja2
+  rather than Mako. Note that Jinja2 templates used standalone or as layout
+  templates for Markdown content should have the extension `.html` rather than
+  `.mhtml`.
 
 - `redirects`: If this is True or a string pointing to a YAML file in the
   `data/` directory (whose default name is `redirects.yaml`), then wmk will
@@ -768,9 +792,11 @@ markdown (or other) content. More advanced possibilities include formatting a
 table containing data from a CSV file or generating a cropped and scaled
 thumbnail image.
 
-Shortcodes are implemented as Mako components named `<shortcode>.mc` in the
-`shortcodes` subdirectory of `templates` (or of some other directory in your
-Mako search path, e.g. `themes/<my-theme>/templates/shortcodes`).
+Shortcodes are normally implemented as Mako components named `<shortcode>.mc` in
+the `shortcodes` subdirectory of `templates` (or of some other directory in your
+template search path, e.g. `themes/<my-theme>/templates/shortcodes`). If
+`jinja2_templates` is set to true, however, the shortcode templates are in
+Jinja2 format instead, and use the `.jc` extension rather than `.mc`.
 
 The shortcode itself looks like a function call. Note that positional
 arguments can only be used if the component has an appropriate `<%page>`
@@ -843,6 +869,11 @@ keys = info[0].keys()
   </tbody>
 </table>
 ```
+
+Note that if Jinja2 templates are being used, positional arguments are not
+supported except for in built-in shortcodes, so the shortcode call in the
+Markdown in the above example would have to be changed to
+`cvs_table(csvfile='expenses_2021.csv')` or similar.
 
 Shortcodes can take up more than one line if desired, for instance:
 
@@ -937,16 +968,24 @@ The following default shortcodes are provided by the `wmk` installation:
   resize operation are only performed once.  The source `path` is taken to be
   relative to the `WEBROOT`, i.e. the project `htdocs` directory.
 
-- `template`: The first argument (`template`) is either the filename of a Mako
-  template or literal Mako source code. The heuristic used to distinguish
+- `template`: The first argument (`template`) is either the filename of a
+  template or literal template source code. The heuristic used to distinguish
   between these two cases is simply that filenames are assumed never to contain
-  whitespace while Mako source code always does. In either case, the template
-  is called and its output inserted into the content document. Any additional
-  arguments are passed directly on to the template (which will also see the
-  normal Mako context for the shortcode itself).
+  whitespace while source code always does. In either case, the template
+  is called and its output inserted into the content document. The boolean
+  argument `is_jinja` (default False) can be used to indicate that the given
+  template source code is to be handled by Jinja2; otherwise Mako is assumed.
+  For template files, however, the currently active engine as determined by the
+  value of the `jinja2_templates` is always used, regardless of the `is_jinja`
+  parameter. Any additional arguments are passed directly on to the template
+  (which will also see the normal template context for the shortcode itself).
 
 - `twitter`: A tweet. Takes a `tweet_id`, which may be a Twitter status URL or
   the last part (i.e. the actual ID) of the URL.
+
+- `var`: The value of a variable, e.g. `"page.title"` or `"site.description"`.
+  One required argument: `varname`. Optional argument: `default` (which defaults
+  to the empty string), indicating what to show if the variable is not available.
 
 - `vimeo`: A Vimeo video. One required argument: `id`. Optional arguments:
   `css_class`, `autoplay`, `dnt` (do not track), `muted`, `title`.
@@ -956,10 +995,6 @@ The following default shortcodes are provided by the `wmk` installation:
 
 - `wp`: A link to Wikipedia. One required argument: `title`. Optional arguments:
   `label`, `lang`. Example: `{{< wp('L.L. Zamenhof', lang='eo') >}}`.
-
-- `var`: The value of a variable, e.g. `"page.title"` or `"site.description"`.
-  One required argument: `varname`. Optional argument: `default` (which defaults
-  to the empty string), indicating what to show if the variable is not available.
 
 <!-- pagevars "Site, page and nav variables" 110 -->
 
@@ -1098,25 +1133,25 @@ extension must be active.
 ### System variables
 
 The following frontmatter variables affect the operation of `wmk` itself, rather
-than being exclusively handled by Mako templates.
+than being exclusively used by templates.
 
 #### Templates
 
 **Note** that a variable called something like `page.foo` below is referenced as
-such in Mako templates but specified in YAML frontmatter simply as `foo:
-somevalue`.
+such in templates but specified in YAML frontmatter simply as `foo: somevalue`.
 
-- `page.template` specifies the Mako template which will render the content.
+- `page.template` specifies the template which will render the content.
 
 - `page.layout` is used by several other static site generators. For
   compatibility with them, this variable is supported as a fallback synonym with
   `template`.  It has no effect unless `template` has not been specified
   explicitly anywhere in the cascade of frontmatter data sources.
 
-For both `template` and `layout`, the `.mhtml` extension of the template may be
-omitted. If the `template` value appears to have no extension, `.mhtml` is
-assumed; but if the intended template file has a different extension, then it
-of course cannot be omitted.
+For both `template` and `layout`, the `.mhtml` (or `.html` in the case of
+Jinja2) extension of the template may be omitted. If the `template` value
+appears to have no extension, `.mhtml` or `.html` (depending on the template
+engine) is assumed; but if the intended template file has a different extension,
+then it must of course be specified.
 
 Likewise, a leading `base/` directory may be omitted when specifying `template`
 or `layout`. For instance, a `layout` value of `post` would find the template
@@ -1125,7 +1160,8 @@ somewhere in the template search path.
 
 If neither `template` nor `layout` has been specified and no `default_template`
 setting is found in `wmk_config.yaml`, the default template name for markdown
-files is `md_base.mhtml`.
+files is `md_base.mhtml` (or `md_base.html` if Jinja2 templates have been
+selected).
 
 #### Affects rendering
 
@@ -1370,9 +1406,10 @@ See also the description of the `DATE` and `MTIME` context variables above.
 
 ## Template filters
 
-In addition to the [built-in template
-filters](https://docs.makotemplates.org/en/latest/filtering.html) provided by
-Mako, the following filters are by default made available in templates:
+In addition to the built-in template filters provided by
+[Mako]((https://docs.makotemplates.org/en/latest/filtering.html)) or
+[Jinja2](https://jinja.palletsprojects.com/en/stable/templates/#list-of-builtin-filters)
+respectively, the following filters are by default made available in templates:
 
 - `date`: date formatting using strftime. By default, the format '%c' is used.
   A different format is specified using the `fmt` parameter, e.g.:
@@ -1433,12 +1470,14 @@ Mako, the following filters are by default made available in templates:
   Uses the corresponding entry from the `ASSETS_MAP` context variable if it is
   available but otherwise proceeds to do the fingerprinting itself.
 
-If you wish to provide additional filters without having to explicitly define or
-import them in templates, the best way of doing this his to add them via the
-`mako_imports` setting in `wmk_config.yaml` (see above).
+If you wish to provide additional filters in Mako without having to explicitly
+define or import them in templates, the best way of doing this his to add them
+via the `mako_imports` setting in `wmk_config.yaml` (see above). There is
+currently no easy way to do this if Jinja2 templates are being used, however.
 
 Please note that in order to avoid conflicts with the above filters you should
-not place a file named `wmk_mako_filters.py` in your `py/` directories.
+not place a file named `wmk_mako_filters.py` or `wmk_jinja2_extras.py` in your
+`py/` directories.
 
 <!-- mdcontentlist "Working with lists of pages" 130 -->
 
@@ -1743,8 +1782,9 @@ For information about the supported syntax of the search expression, see the
 - Note that only the raw content document is indexed, not the HTML after the
   markdown (or other input content) has been processed. The only exception to
   this is that the binary input formats (DOCX, ODT, EPUB) are converted to
-  markdown before being indexed. The output of Mako templates (including
-  shortcodes called from the content documents) is not indexed either.
+  markdown before being indexed. The output of templates (including even text
+  resulting from shortcodes called from the content documents) is not indexed
+  either.
 
 - Because Lunr creates a single index file for the whole site, it may not be a
   practical  option for large sites with lots of content – a realistic
@@ -1846,15 +1886,15 @@ before or after them, or can be redefined entirely:
 - `get_content`
 - `get_extra_content`
 - `get_index_yaml_data`
-- `get_mako_lookup`
 - `get_nav`
+- `get_template_lookup`
 - `get_template_vars`
 - `get_templates`
 - `handle_redirects`
+- `handle_shortcode`
 - `index_content`
 - `locale_and_translation`
 - `lunr_summary`
-- `mako_shortcode`
 - `markdown_extensions_settings`
 - `maybe_extra_meta`
 - `maybe_save_mdcontent_as_json`

@@ -1,0 +1,3 @@
+{%- set tpl = mako_lookup.get_template("/shortcodes/resize_image.mc") -%}
+{%- set ctx = get_context() -%}
+{{- tpl.render(**ctx) |safe -}}

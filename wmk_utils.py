@@ -512,8 +512,9 @@ class MDContentList(list):
         dest_dir = re.sub(r'/[^/]+$', '', full_path)
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
-        tpl = context.lookup.get_template(template)
-        kw = dict(**context.kwargs)
+        lookup = context.get('LOOKUP') or context.lookup
+        tpl = lookup.get_template(template)
+        kw = dict(**context.kwargs) if hasattr(context, 'kwargs') else context
         kw['SELF_URL'] = dest
         kw['CHUNK'] = self
         with open(full_path, 'w') as f:
@@ -558,7 +559,8 @@ class MDContentList(list):
                 # only on page 1.
                 self_tpl = context.get('SELF_TEMPLATE')
                 webroot = context.get('WEBROOT')
-                page_template = context.lookup.get_template(self_tpl)
+                lookup = context.get('LOOKUP') or context.lookup
+                page_template = lookup.get_template(self_tpl)
                 for pg in range(2, len(chunks)+1):
                     kw = dict(**context.kwargs)
                     kw['_page'] = pg

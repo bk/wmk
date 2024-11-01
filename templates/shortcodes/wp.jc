@@ -1,0 +1,1 @@
+<a href="https://{{ lang |default('en') }}.wikipedia.org/wiki/{{ title |replace(' ', '_')|urlencode }}" class="wikipedia"{% if target %} target="{{ target }}"{% endif %}>{{ label|default(title)|replace('_', ' ') }}</a>

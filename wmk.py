@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.10.3'
+VERSION = '1.11'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -138,7 +138,7 @@ def main(basedir=None, quick=False):
     # a) Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = get_template_vars(dirs, themedir, conf, assets_map)
-    lookup = get_mako_lookup(dirs, themedir, conf)
+    lookup = get_template_lookup(dirs, themedir, conf)
     conf['_lookup'] = lookup
 
     # 4) write redirect files
@@ -216,7 +216,7 @@ def get_content_info(basedir='.', content_only=True):
             pass
     assets_map = fingerprint_assets(conf, dirs['output'], dirs['data'])
     template_vars = get_template_vars(dirs, themedir, conf, assets_map)
-    lookup = get_mako_lookup(dirs, themedir, conf)
+    lookup = get_template_lookup(dirs, themedir, conf)
     conf['_lookup'] = lookup
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
@@ -321,20 +321,49 @@ def auto_nav_from_content(content):
 
 
 @hookable
-def get_mako_lookup(dirs, themedir, conf):
+def get_template_lookup(dirs, themedir, conf):
     lookup_dirs = [dirs['templates']]
     if themedir and os.path.exists(os.path.join(themedir, 'templates')):
         lookup_dirs.append(os.path.join(themedir, 'templates'))
     if conf.get('extra_template_dirs', None):
         lookup_dirs += conf['extra_template_dirs']
-    # e) Mako search path
     # Add wmk_home templates for "built-in" shortcodes
     wmk_home = os.path.dirname(os.path.realpath(__file__))
     lookup_dirs.append(os.path.join(wmk_home, 'templates'))
     mako_imports = ['from wmk_mako_filters import ' + ', '.join(wmf.__all__)]
     if conf.get('mako_imports', None):
         mako_imports += conf.get('mako_imports')
-    return TemplateLookup(directories=lookup_dirs, imports=mako_imports)
+    is_jinja = conf.get('jinja2_templates') or False
+    if is_jinja:
+        from jinja2 import (
+            Environment, FileSystemLoader, select_autoescape, pass_context)
+        import wmk_jinja2_extras as wje
+        # TODO: Handle potential Jinja2 settings in conf
+        loader = FileSystemLoader(
+            searchpath=lookup_dirs, encoding='utf-8', followlinks=True)
+        env = Environment(
+            loader=loader,
+            autoescape=select_autoescape())
+        env.globals = wje.get_globals()
+        env.globals['mako_lookup'] = TemplateLookup(
+            directories=lookup_dirs, imports=mako_imports)
+        @pass_context
+        def get_context(c):
+            _c = c.get_all()
+            reserved = ('context', 'UNDEFINED', 'loop')
+            ret = {}
+            for k in _c:
+                if k in reserved:
+                    continue
+                ret[k] = _c[k]
+            return ret
+        env.globals['get_context'] = get_context
+        env.filters.update(wje.get_filters())
+        # TODO: Add potential user-defined custom filters
+        return env
+    else:
+        return TemplateLookup(
+            directories=lookup_dirs, imports=mako_imports)
 
 
 @hookable
@@ -433,7 +462,7 @@ def preview_single(basedir, preview_file,
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = get_template_vars(dirs, themedir, conf, assets_map=None)
-    lookup = get_mako_lookup(dirs, themedir, conf)
+    lookup = get_template_lookup(dirs, themedir, conf)
     conf['_lookup'] = lookup
     # 4) get info about stand-alone templates and Markdown content
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])
@@ -544,14 +573,14 @@ def get_dirs(basedir, conf):
     output_dir = re.sub(r'^[\.\/]+', '', output_dir)
     return {
         'base': basedir,
-        'templates': basedir + '/templates', # Mako templates
+        'templates': basedir + '/templates', # Mako/Jinja2 templates
         'content': basedir + '/content',  # Markdown files
         'output': basedir + '/' + output_dir, # normally htdocs/
         'static': basedir + '/static',
         'assets': basedir + '/assets', # only scss for now
         'data': basedir + '/data', # YAML, potentially sqlite
         'themes': basedir + '/themes', # extra static/assets/templates
-        'python': basedir + '/py', # python modeles available to Mako templates
+        'python': basedir + '/py', # python modules for hooks/templates
     }
 
 
@@ -615,6 +644,7 @@ def process_templates(templates, lookup, template_vars, force):
         data['SELF_URL'] = self_url
         data['SELF_FULL_PATH'] = None
         data['SELF_TEMPLATE'] = tpl['src']
+        data['LOOKUP'] = lookup
         data['page'] = attrdict({}) # empty but present...
         try:
             tpl_output = template.render(**data)
@@ -807,19 +837,19 @@ def render_markdown(ct, conf):
                 doc = pp(doc, pg)
     # POSTPROCESS, on the other hand may be added by shortcodes (and often is)
     if '{{<' in doc:
-        # Mako shortcodes
+        # SHORTCODES:
         # We need to handle include() first.
         incpat = r'{{<[ \n\r\t]*(include)\(\s*(.*?)\s*\)\s*>}}'
         incfound = re.search(incpat, doc, re.DOTALL)
         while incfound:
-            doc = re.sub(incpat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
+            doc = re.sub(incpat, handle_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             incfound = re.search(incpat, doc, re.DOTALL)
         # Now other shortcodes.
         # funcname, argstring
         pat = r'{{<[ \n\r\t]*(\w+)\(\s*(.*?)\s*\)\s*>}}'
         found = re.search(pat, doc, re.DOTALL)
         while found:
-            doc = re.sub(pat, mako_shortcode(conf, data, nth), doc, flags=re.DOTALL)
+            doc = re.sub(pat, handle_shortcode(conf, data, nth), doc, flags=re.DOTALL)
             found = re.search(pat, doc, re.DOTALL)
     if is_html:
         ret = doc
@@ -1301,7 +1331,9 @@ def process_content_item(
     slug and id, and template), give it the template variables, and add it to
     the content list. Called for each item processed in get_content().
     """
-    default_template = conf.get('default_template', 'md_base.mhtml')
+    is_jinja = conf.get('jinja2_templates') or False
+    default_template = conf.get(
+        'default_template', ('md_base.html' if is_jinja else 'md_base.mhtml'))
     default_pretty_path = lambda x: False if x.startswith('index.') else True
     # data is global vars, page is specific to this markdown file
     data = {}
@@ -1343,7 +1375,9 @@ def process_content_item(
                 'layout', data.get(
                     'layout', default_template))))
     if not re.search(r'\.\w{2,5}$', template):
-        template += '.mhtml'
+        template += ('.html' if is_jinja else '.mhtml')
+    if not re.search(r'base|/', template) or template.startswith('_'):
+        template = 'base/' + template
     if not 'template' in page:
         page['template'] = template
     # pretty_path
@@ -1543,7 +1577,7 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
             for fn in files:
                 if 'base' in fn or fn.startswith(('_', '.')):
                     continue
-                if fn.endswith('.mhtml'):
+                if fn.endswith(('.mhtml', '.jhtml', '.html')):
                     source = os.path.join(root.replace(tplroot, '', 1), fn)
                     if source.startswith('/'):
                         source = source[1:]
@@ -1551,11 +1585,11 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
                     if source in seen:
                         continue
                     seen.add(source)
-                    # Keep an extra extension before .mhtml (e.g. "atom.xml.mhtml")
-                    if re.search(r'\.\w{2,5}\.mhtml$', fn):
-                        html_fn = fn.replace('.mhtml', '')
+                    # Keep pre-extension before .mhtml/.jhtml/.html (e.g. "atom.xml.mhtml")
+                    if re.search(r'\.\w{2,5}\.[mj]?html$', fn):
+                        html_fn = fn.replace('.[mj]?html', '')
                     else:
-                        html_fn = fn.replace('.mhtml', '.html')
+                        html_fn = fn.replace('.[mj]?html', '.html')
                     html_dir = root.replace(tplroot, outputdir, 1)
                     target = os.path.join(html_dir, html_fn)
                     templates.append({
@@ -1682,8 +1716,9 @@ def parse_argstr(argstr):
 
 
 @hookable
-def mako_shortcode(conf, ctx, nth=None):
-    "Return a match replacement function for mako shortcode handling."
+def handle_shortcode(conf, ctx, nth=None):
+    "Return a match replacement function for shortcode handling."
+    is_jinja = conf.get('jinja2_templates') or False
     if nth is None:
         nth = {}
     def replacer(match):
@@ -1696,8 +1731,10 @@ def mako_shortcode(conf, ctx, nth=None):
         args, kwargs = parse_argstr(argstr)
         try:
             lookup = conf['_lookup']
-            subdir = conf.get('mako_shortcodes_dir', 'shortcodes')
-            tplnam = '%s/%s.mc' % (subdir.strip('/'), name)
+            dirkey = 'jinja2_shortcodes_dir' if is_jinja else 'mako_shortcodes_dir'
+            subdir = conf.get(dirkey, 'shortcodes')
+            ext = 'jc' if is_jinja else 'mc'
+            tplnam = '%s/%s.%s' % (subdir.strip('/'), name, ext)
             tpl = lookup.get_template(tplnam)
             ckwargs = {}
             ckwargs.update(ctx)
@@ -1705,13 +1742,45 @@ def mako_shortcode(conf, ctx, nth=None):
             ckwargs['nth'] = nth[name]  # invocation count
             if not 'LOOKUP' in ckwargs:
                 ckwargs['LOOKUP'] = lookup
-            return tpl.render(*args, **ckwargs)
+            if is_jinja and args:
+                _fix_jinja_shortcode_args(name, args, ckwargs)
+                if args:
+                    raise Exception(
+                        'Cannot handle positional shortcode arguments with jinja_templates set to True')
+                return tpl.render(**ckwargs)
+            else:
+                return tpl.render(*args, **ckwargs)
         except Exception as e:
             print("WARNING: shortcode {} failed in {}: {}".format(
                 name, ctx.get('SELF_SHORT_PATH', '??'), e))
             # prevent infinite loops
             return match.group(0).replace('{', '(').replace('}', ')')
     return replacer
+
+
+def _fix_jinja_shortcode_args(name, args, ckwargs):
+    # Workaround to allow using positional arguments for "built-in" shortcodes
+    # when Jinja2 templates are being used.
+    argnames = {
+        'figure': ['src'],
+        'gist': ['username', 'gist_id'],
+        'include': ['filename', 'fallback'],
+        'linkto': ['match'],
+        'pagelist': ['match_expr'],
+        'resize_image': ['path', 'width', 'height'],
+        'template': ['template'],
+        'twitter': ['twitter_id'],
+        'var': ['varname', 'default'],
+        'vimeo': ['id'],
+        'wp': ['title'],
+        'youtube': ['id'],
+    }
+    if name not in argnames:
+        return
+    for k in argnames[name]:
+        if not args:
+            return
+        ckwargs[k] = args.pop(0)
 
 
 @hookable

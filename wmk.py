@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.11.1'
+VERSION = '1.11.2'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -1587,9 +1587,9 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
                     seen.add(source)
                     # Keep pre-extension before .mhtml/.jhtml/.html (e.g. "atom.xml.mhtml")
                     if re.search(r'\.\w{2,5}\.[mj]?html$', fn):
-                        html_fn = fn.replace('.[mj]?html', '')
+                        html_fn = re.sub(r'\.[mj]?html', '', fn)
                     else:
-                        html_fn = fn.replace('.[mj]?html', '.html')
+                        html_fn = re.sub(r'\.[mj]?html', '.html', fn)
                     html_dir = root.replace(tplroot, outputdir, 1)
                     target = os.path.join(html_dir, html_fn)
                     templates.append({

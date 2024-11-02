@@ -110,6 +110,10 @@ class attrdict(dict):
             #return Undefined()
             return attrdict({})
 
+    def __call__(self):
+        # For Jinja2
+        return attrdict({})
+
 
 class MDContentList(list):
     """

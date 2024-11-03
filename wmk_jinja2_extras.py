@@ -8,11 +8,9 @@ import wmk_mako_filters as wmf
 
 def get_globals():
     return {
-        # allows importing modules in templates like this:
+        # Allows importing modules in templates like this:
         # {% set mymodule = import('mymodule') %}
         'import': importlib.import_module,
-        're': re,
-        'datetime': datetime,
         # From wmk_mako_filters
         'markdownify': wmf.markdownify,
         'slugify': wmf.slugify,

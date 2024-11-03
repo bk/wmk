@@ -433,10 +433,11 @@ In the case of Jinja2 templates, three extra context variables are available:
 - `mako_lookup`: A Mako `TemplateLookup` instance which makes it possible to call
   Mako templates from a Jinja2 template.
 - `get_context`: A function returning all context variables as a dict.
-- `imp0rt`: A function which can be used to import a Python module into a Jinja
-  template, e.g. `{% set utils = imp0rt('my_utils') %}`. The main intent is to
-  make code inside the project `py/` subdirectory as easily available in Jinja
-  templates as it is in Mako templates.
+- `import`: An alias for `importlib.import_module` and can thus be used to
+  import a Python module into a Jinja template as the value of a variable, e.g.
+  `{% set utils = imp0rt('my_utils') %}`. The main intent is to make code inside
+  the project `py/` subdirectory as easily available in Jinja templates as it is
+  in Mako templates.
 
 When templates are rendering markdown (or other) content, they additionally get
 the following context variables:

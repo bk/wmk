@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.11.3'
+VERSION = '1.11.4'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -138,7 +138,7 @@ def main(basedir=None, quick=False):
     # a) Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = get_template_vars(dirs, themedir, conf, assets_map)
-    lookup = get_template_lookup(dirs, themedir, conf)
+    lookup = get_template_lookup(dirs, themedir, conf, template_vars)
     conf['_lookup'] = lookup
 
     # 4) write redirect files
@@ -216,7 +216,7 @@ def get_content_info(basedir='.', content_only=True):
             pass
     assets_map = fingerprint_assets(conf, dirs['output'], dirs['data'])
     template_vars = get_template_vars(dirs, themedir, conf, assets_map)
-    lookup = get_template_lookup(dirs, themedir, conf)
+    lookup = get_template_lookup(dirs, themedir, conf, template_vars)
     conf['_lookup'] = lookup
     templates = get_templates(
         dirs['templates'], themedir, dirs['output'], template_vars)
@@ -321,7 +321,7 @@ def auto_nav_from_content(content):
 
 
 @hookable
-def get_template_lookup(dirs, themedir, conf):
+def get_template_lookup(dirs, themedir, conf, template_vars=None):
     lookup_dirs = [dirs['templates']]
     if themedir and os.path.exists(os.path.join(themedir, 'templates')):
         lookup_dirs.append(os.path.join(themedir, 'templates'))
@@ -359,6 +359,10 @@ def get_template_lookup(dirs, themedir, conf):
             return ret
         env.globals['get_context'] = get_context
         env.filters.update(wje.get_filters())
+        if template_vars and 'fingerprint' in template_vars:
+            env.filters.update({
+                'fingerprint': template_vars['fingerprint'],
+                'url': template_vars.get('url')})
         # TODO: Add potential user-defined custom filters
         return env
     else:
@@ -462,7 +466,7 @@ def preview_single(basedir, preview_file,
     # Global data for template rendering, used by both process_templates
     # and process_markdown_content.
     template_vars = get_template_vars(dirs, themedir, conf, assets_map=None)
-    lookup = get_template_lookup(dirs, themedir, conf)
+    lookup = get_template_lookup(dirs, themedir, conf, template_vars)
     conf['_lookup'] = lookup
     # 4) get info about stand-alone templates and Markdown content
     index_yaml = get_index_yaml_data(dirs['content'], dirs['data'])

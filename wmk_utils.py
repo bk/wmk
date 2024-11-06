@@ -271,7 +271,7 @@ class MDContentList(list):
             return False
         return self.match_page(found)
 
-    def taxonomy_info(self, keys, order='count'):
+    def taxonomy_info(self, keys, order='count', tostring=None):
         """
         A list of values for any of the keys in `keys`. The values are assumed
         to be strings/ints or lists of strings/ints. Example usage:
@@ -327,7 +327,12 @@ class MDContentList(list):
                         _additem(pg[k], it)
                     elif isinstance(pg[k], (list, tuple)):
                         for tx in pg[k]:
-                            _additem(tx, it)
+                            if tostring and not isinstance(tx, (str, int)):
+                                _additem(tostring(tx), it)
+                            else:
+                                _additem(tx, it)
+                    elif tostring:
+                        _additem(tostring(pg[k]), it)
         found = list(taxons.values())
         if order == 'count':
             found.sort(key=lambda x: x['count'], reverse=True)
@@ -346,6 +351,17 @@ class MDContentList(list):
     def get_sections(self, order='name'):
         "Sections along with list of pages/posts in them."
         return self.taxonomy_info(['section', 'sections'], order)
+
+    def get_authors(self, order='name', tostring=None):
+        """
+        Authors along with list of pages/posts created by them.
+
+        NOTE: If there are any authors that are not not specified as a string,
+        you must pass a `tostring` callable (e.g.  `lambda x: x['name']`) so as
+        to coerce it into one.
+        """
+        return self.taxonomy_info(['author', 'authors'], order, tostring=tostring)
+
 
     def in_category(self, catlist):
         "Pages/posts in any of the listed categories."

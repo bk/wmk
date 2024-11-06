@@ -1560,6 +1560,18 @@ All of these return a new `MDContentList` object (at least by default).
   result, since they otherwise will be omitted. Returns a dict whose keys are
   strings and whose values are `MDContentList` instances.
 
+- `taxonomy_info(self, keys, order='count', tostring=None)`: Returns a list of
+  dicts, where each dict corresponds to the slugified value of any of the keys
+  in `keys`.  The keys in the dict are `name`, `slug`, `forms` (different forms
+  of `name` that appear in the result, e.g. upper/lowercase), `count`, and
+  `items` (an MDContentList object). `tostring`, if present, is a callable that
+  changes non-string and non-list values into strings for the purposes of
+  grouping. Shorthand forms for common taxonomy types are available, namely
+  `get_categories(self, order='name')`, `get_tags(self, order='name')`,
+  `get_sections(self, order='name')`, and `get_authors(self, order='name',
+  tostring=None)`. These look for both singular and plural forms of the given
+  keys, e.g. `['tag', 'tags']` for `get_tags()`.
+
 - `page_match(self, match_expr, ordering=None, limit=None)`: This is actually
   quite a general matching method but does not require the caller to pass a
   predicate callable to it, which means that it can be employed in more varied

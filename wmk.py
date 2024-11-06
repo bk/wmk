@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.12'
+VERSION = '1.13'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -730,6 +730,7 @@ def process_markdown_content(content, lookup, conf, force):
             print("TOC ERROR for %s: %s" % (ct['url'], str(e)))
             data['TOC'] = Toc('')
         html_output = ''
+        handle_taxonomy(data)
         try:
             html_output = template.render(**data)
         except:
@@ -748,6 +749,45 @@ def process_markdown_content(content, lookup, conf, force):
             # ("headless" in Hugo parlance)
             print('[%s] - non-rendered: %s' % (
                 str(datetime.datetime.now()), ct['source_file_short']))
+
+
+@hookable
+def handle_taxonomy(data):
+    """
+    - Adds TAXONS to context (i.e. data) for the base template that will be
+      called immediately after this in the flow.
+    - Writes a page (using the MDContentList write_to() method) for each taxon
+      with TAXON (== CHUNK) and TAXON_INDEX (indicating its ordering in TAXONS)
+      in the context.
+    - No return value.
+    """
+    txy = data['page'].TAXONOMY
+    if txy and 'taxon' in txy and 'detail_template' in txy:
+        txy.valid = True
+        maybe_order = {'order': txy['order']} if txy['order'] else {}
+        taxons = data['MDCONTENT'].taxonomy_info(txy['taxon'], **maybe_order)
+        data['TAXONS'] = taxons
+        base_url = data['SELF_URL']
+        for i, tx in enumerate(taxons):
+            # NOTE: Assumes normal pretty_path setting!
+            dest = re.sub(r'/index.html$',
+                          '/{}/index.html'.format(tx['slug']),
+                          base_url)
+            if dest == data['SELF_URL']:
+                raise Exception(
+                    'handle_taxonomy() requires pretty_path to be active or auto')
+            ctx = dict(**data)
+            ctx['SELF_TEMPLATE'] = txy['detail_template']
+            tx['url'] = dest
+            tx['items'].write_to(
+                dest=dest,
+                context=ctx,
+                extra_kwargs={'TAXON': tx, 'TAXON_INDEX': i},
+                template=txy['detail_template'])
+    elif txy:
+        print("WARNING: BAD TAXONOMY for", data['SELF_URL'])
+        txy.valid = False
+        data['TAXONS'] = []
 
 
 @hookable
@@ -1576,7 +1616,7 @@ def get_templates(tpldir, themedir, outputdir, template_vars):
         searchdirs.append(os.path.join(themedir, 'templates'))
     for tplroot in searchdirs:
         for root, dirs, files in os.walk(tplroot):
-            if root.endswith('/base'):
+            if root.endswith('/base') or '/base/' in root:
                 continue
             for fn in files:
                 if 'base' in fn or fn.startswith(('_', '.')):

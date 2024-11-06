@@ -1164,7 +1164,84 @@ setting is found in `wmk_config.yaml`, the default template name for markdown
 files is `md_base.mhtml` (or `md_base.html` if Jinja2 templates have been
 selected).
 
-#### Affects rendering
+#### Taxonomy handling
+
+A taxonomy is a classification of pieces of content for the purpose of grouping
+them together.  Common taxonomy types are tags, categories, sections and article
+authors. However, the taxonomy that is appropriate to a particular website
+mainly depends on the content. On a site with book reviews you would have
+genres, book authors and publishers, on a movie site you would have genres and
+actors, and so on. Each set of frontmatter classifiers (e.g. the single
+classifier `tag` or the list `['tag', 'tags']`) used in a taxonomy may be called
+a *term*. Each term may have several *values*, and each value represents a list
+of content items associated with it.
+
+Up to version 1.13 of wmk, taxonomies had to be handled by templates, and this
+is still the best way to do it if you want a form of presentation which is
+tailored to a particular term. However, as a consequence, themes had to be
+designed around specific taxonomies, typically tags, categories, or sections.
+In other words, the presentation of taxonomies was not primarily content-driven.
+
+From version 1.13 it is therefore possible to specify the taxonomy criteria
+directly in the front matter of the main content page for the corresponding
+term. Here is an example based on a movie site, for the term *director*. The
+content file might be named `directors/index.md`:
+
+
+```markdown
+---
+title: Directors
+date: 2024-11-01
+template: base/taxonomy/list.mhtml
+TAXONOMY:
+  taxon: ['director', 'directors']
+  order: name
+  detail_template: base/taxonomy/detail.mhtml
+  list_settings:
+    pagination: true
+    per_page: 24
+  detail_settings:
+    biographies: directors.yaml
+    item_template: lib/movie_teaser.mc
+---
+
+Below is a list of the directors of the movies
+that have been covered on this website.
+
+Click on the name of a director to see a short biography
+and an overview of their movies.
+```
+
+The frontmatter variable `page.TAXONOMY` triggers the special processing of the
+page, provided that it contains at least the subkeys `taxon` and
+`detail_template`. This special processing consists in the following:
+
+1. wmk fetches a list of values for the term specified in `taxon` using the
+   `taxonomy_info()` method of `MDCONTENT`. This will be added to the template
+   context as `TAXONS`.
+
+2. For each value in the list, wmk renders the template `detail_template` with
+   the same context, except that the two keys `TAXON` (the value) and
+   `TAXON_INDEX` (the 0-based index of the value in the list) are added.
+   Each `TAXON` has `items` which represent the pages tagged with that director,
+   and the main job of thet detail page is to show a list of them to the user.
+   The result is written to a destination file the name of which is based on the
+   destination of the rendered Markdown content plus the slug of the string
+   identifying the value (e.g. `directors/orson-welles/index.html` in this
+   example). The target url will be available as `TAXON['url']` (and thus also
+   under the key `'url'` for each item in `TAXONS`).
+
+3. wmk resumes normal operation by calling the main template with the modified
+   template context as well as the content from the markdown file, and writes
+   the result to the target file.
+
+Please note that the settings in `list_settings` and `detail_settings` in the
+example above are merely for the purposes of illustration. Whether any of them
+are actually supported is entirely up to the template or theme author. The only
+subvariables used by wmk itself are `taxon`, `order` (if present), and
+`detail_template`.
+
+#### Variables affecting rendering
 
 - `page.slug`: If the value of `slug` is nonempty and consists exclusively of
   lowercase alphanumeric characters, underscores and hyphens (i.e. matches the
@@ -1386,6 +1463,9 @@ See also the description of the `DATE` and `MTIME` context variables above.
   document.
 
 #### Taxonomy
+
+See also the description of `page.TAXONOMY` above. The following are terms
+commonly used for taxonomy purposes:
 
 - `page.section`: One of a quite small number of sections on the site, often
   corresponding to the leading subdirectory in `content`. E.g.  "blog", "docs",
@@ -1905,6 +1985,7 @@ before or after them, or can be redefined entirely:
 - `get_templates`
 - `handle_redirects`
 - `handle_shortcode`
+- `handle_taxonomy`
 - `index_content`
 - `locale_and_translation`
 - `lunr_summary`

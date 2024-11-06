@@ -285,6 +285,8 @@ class MDContentList(list):
          'forms': [f1,f2...], # Different forms of this taxon found (e.g. lower/uppercase)
          'count': n, # how many documents match
          'items': items, } # MDContentList object
+
+        TODO: Add more ordering options.
         """
         if isinstance(keys, str):
             keys = [keys]

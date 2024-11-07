@@ -584,7 +584,8 @@ class MDContentList(list):
                 lookup = context.get('LOOKUP') or context.lookup
                 page_template = lookup.get_template(self_tpl)
                 for pg in range(2, len(chunks)+1):
-                    kw = dict(**context.kwargs)
+                    # For compatibility with Jinja
+                    kw = dict(**context.kwargs) if hasattr(context, 'kwargs') else dict(**context)
                     kw['_page'] = pg
                     output_fn = os.path.join(webroot, url_pat.format(pg).strip('/'))
                     with open(output_fn, 'w') as fpg:

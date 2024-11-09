@@ -1056,10 +1056,16 @@ class TocItem:
         elif child.level == self.level + 1:
             self.children.append(child)
         else:
-            cand = self.children[-1]
-            while cand.level < child.level - 1:
-                cand = cand.children[-1]
-            cand.children.append(child)
+            cand = self.children[-1] if self.children else None
+            while cand and cand.level < child.level - 1:
+                if cand.children:
+                    cand = cand.children[-1]
+                else:
+                    break
+            if cand:
+                cand.children.append(child)
+            elif child:
+                self.children.append(child)
 
 
 def hookable(fn):

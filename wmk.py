@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.13.1'
+VERSION = '1.14'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -98,7 +98,7 @@ def main(basedir=None, quick=False):
     except:
         pass
 
-    # 1) copy static files
+    # 1) get theme settings, copy static files
     # css_dir_from_start is workaround for process_assets timestamp check
     css_dir_from_start = os.path.exists(os.path.join(dirs['output'], 'css'))
     # a) preparation, loading plugins, setting sys.path etc
@@ -123,8 +123,10 @@ def main(basedir=None, quick=False):
                 autoload[k] = theme_autoload[k]
         except:
             pass
-    # b) Doing the actual copying.
+    # b) Run init commands, if any
+    run_init_commands(basedir, conf)
     #    (NOTE: hookable works at this point, since sys.path is ready).
+    # c) Doing the actual copying.
     copy_static_files(dirs, themedir, conf, quick)
 
     # 2) compile assets (only scss for now):
@@ -494,6 +496,21 @@ def conf_merge(primary, secondary):
             for k2 in secondary[k]:
                 if not k2 in primary[k]:
                     primary[k][k2] = secondary[k][k2]
+
+
+@hookable
+def run_init_commands(basedir, conf):
+    init_commands = conf.get('init_commands', [])
+    for cmd in init_commands:
+        print("[%s] - init command: %s" % (datetime.datetime.now(), cmd))
+        ret = subprocess.run(
+            cmd, cwd=basedir, shell=True, capture_output=True, encoding='utf-8')
+        if ret.returncode == 0 and ret.stdout:
+            print("  **OK**:", ret.stdout)
+        elif ret.returncode != 0:
+            print('  **WARNING: init command error [exitcode={}]:'.format(
+                ret.returncode), ret.stderr)
+
 
 
 @hookable

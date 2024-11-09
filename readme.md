@@ -698,6 +698,11 @@ Currently there is support for the following settings:
   `htdocs/`, `data/` or `tmp/`. If the file path does not start with one of
   these, `data` is assumed. The specified (or implied) directory must exist.
 
+- `init_commands`: A list of arbitrary commands to run at the very beginning
+  of processing, just after theme settings have been loaded and the Python
+  search path configured. They are run in order inside the base directory
+  of the site.
+
 - `cleanup_commands`: A list of arbitrary commands to run at the very end of wmk
   processing. The commands are run in order inside the base directory of the
   site.
@@ -2006,6 +2011,7 @@ before or after them, or can be redefined entirely:
 - `process_markdown_content`
 - `process_templates`
 - `render_markdown`
+- `run_init_commands`
 - `run_cleanup_commands`
 - `write_redir_file`
 

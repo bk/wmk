@@ -1172,6 +1172,9 @@ setting is found in `wmk_config.yaml`, the default template name for markdown
 files is `md_base.mhtml` (or `md_base.html` if Jinja2 templates have been
 selected).
 
+The special `template`/`layout` value `__empty__` (case-insensitive) indicates
+that no base template should be applied to the given content file.
+
 #### Taxonomy handling
 
 A taxonomy is a classification of pieces of content for the purpose of grouping

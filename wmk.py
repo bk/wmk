@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.14'
+VERSION = '1.15'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -694,7 +694,8 @@ def process_markdown_content(content, lookup, conf, force):
         if not force and is_older_than(ct['source_file'], ct['target']):
             continue
         try:
-            template = lookup.get_template(ct['template'])
+            template = None if ct['template'].lower() == '__empty__' \
+                else lookup.get_template(ct['template'])
         except TemplateLookupException:
             if not '/' in ct['template']:
                 template = lookup.get_template('base/' + ct['template'])
@@ -749,8 +750,12 @@ def process_markdown_content(content, lookup, conf, force):
         html_output = ''
         handle_taxonomy(data)
         try:
-            html_output = template.render(**data)
+            if template is None:
+                html_output = data['CONTENT'] or ''
+            else:
+                html_output = template.render(**data)
         except:
+            # TODO: Does not really make sense for Jinja template errors
             print("WARNING: Error when rendering {}: {}".format(
                 ct['source_file_short'], text_error_template().render()))
         # If present, POSTPROCESS will have been added by a shortcode call
@@ -1435,11 +1440,13 @@ def process_content_item(
             'template', page.get(
                 'layout', data.get(
                     'layout', default_template))))
-    if not re.search(r'\.\w{2,5}$', template):
+    if not template.lower() == '__empty__' and not re.search(r'\.\w{2,5}$', template):
         template += ('.html' if is_jinja else '.mhtml')
-    if not re.search(r'base|/', template) or template.startswith('_'):
+    # TODO: get rid of this heuristic for Jinja templates and handle base/
+    # fallback at final rendering time like we do with Mako:
+    if is_jinja and not (re.search(r'base|/', template) or template.startswith('_')):
         template = 'base/' + template
-    if not 'template' in page:
+    if 'template' not in page:
         page['template'] = template
     # pretty_path
     pretty_path = page.get(

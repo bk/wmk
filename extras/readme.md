@@ -14,6 +14,10 @@ This may either be used to migrate from WordPress to a static site maintained
 by wmk, or to use a (possibly non-public) WordPress installation as a headless
 CMS for external authors or non-technical users.
 
+For the latter task, the helper scripts `duplicate_wp_content.py` and
+`removed_wp_content.py` may help with the housekeeping involved in keeping the
+content properly synchronized.
+
 ### Usage
 
 ```
@@ -61,15 +65,21 @@ removed if you wish to refetch everything. Content files will not be overwritten
 unless the source has been modified more recently than the saved timestamp.
 Static files will not be refetched, regardless of the timestamp.
 
-### Limitations
+### Helper scripts
 
-Note that renames and deletions of posts or pages are not detected by this
-script, so repeated imports may cause duplicated and stale content in the wmk
-content directory relative to the WordPress source site.
+Note that renames and deletions of posts or pages at the origin are not detected
+by `wordpress2content.py`, so repeated invocations over an extended period may
+cause duplicated or stale content in the wmk content directory relative to the
+WordPress source site.
 
 Renames can be detected by looking for duplicated `external_id` values in the
 frontmatter of the content items inside the import directory, whereupon the item
-or items with the earlier `modified_date` can be removed.
+or items with the earlier `modified_date` can be removed. The auxiliary script
+`duplicate_wp_content.py` helps with this task.
 
-Detecting deletions, however, requires comparing with the WordPress API directly
-for each item imported in earlier runs.
+Detecting content that has been deleted or otherwise deactivated, however,
+requires comparing with the WordPress API directly for each item imported in
+earlier runs. This is what the auxiliary script `removed_wp_content.py` does.
+
+Both of these scripts only list the duplicates/deletions for you. The relevant
+content files will still have to be removed manually.

@@ -2124,5 +2124,6 @@ When used in the latter way, the helper scripts `duplicate_wp_content.py` and
 `removed_wp_content.py` may help with the housekeeping involved in keeping the
 content properly synchronized.
 
-For further details, see the
-[readme](https://github.com/bk/wmk/extras/readme.md) in the `extras/` directory.
+For further details, see the [readme][extras-readme] in the `extras/` directory.
+
+[extras-readme]: https://github.com/bk/wmk/blob/master/extras/readme.md

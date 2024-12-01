@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.16'
+VERSION = '1.16.1'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -1500,7 +1500,7 @@ def process_content_item(
         'pretty_path', data.get('pretty_path', default_pretty_path(fn)))
     if not 'pretty_path' in page:
         page['pretty_path'] = pretty_path
-    # Slug determines destination file
+    # Manual slug determines destination file
     if 'slug' in page and re.match(r'^[a-z0-9_-]+$', page['slug']):
         fn = re.sub(r'[^/]+\.(md|html)$', (page['slug']+r'.\1'), fn)
     # Ensure that the destination file/dir only contains a limited
@@ -1511,7 +1511,12 @@ def process_content_item(
         fn_parts[-1] = slugify(fn_parts[-1])
     # Ensure that slug is present
     if not 'slug' in page:
-        page['slug'] = fn_parts[-1][:-3]
+        slug = re.sub(r'\.\w{2,8}$', '', slugify(fn_parts[-1]))
+        if slug == 'index':
+            root_parts = root.split('/')
+            if root_parts[-1] != 'content':
+                slug = slugify(root_parts[-1]) + '-' + slug
+        page['slug'] = slug
     # Ensure that title is present
     if not 'title' in page:
         # first try the main heading

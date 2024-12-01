@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.15.2'
+VERSION = '1.16'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -276,48 +276,95 @@ def get_nav(conf, dirs=None, themedir=None):
 @hookable
 def auto_nav_from_content(content):
     """
-    Automatically generate a simple nav from frontmatter. Called if conf.nav is
+    Automatically generate a simple nav from frontmatter. Called if `conf.nav` is
     set to 'auto'.
 
-    Each added page MUST have nav_section and MAY have nav_title (which
-    fallbacks to title) and nav_order (which fallbacks to weight or defaults to
-    2**32-1 if that fails).
+    Each added page MUST have `nav_section` and MAY have `nav_title` (which
+    fallbacks to `title`) and `nav_order` (which fallbacks to `weight` or
+    defaults to 2**32-1 if that fails). They MAY also have `nav_parent`/`parent`
+    (for which see below). The attribute `nav_exclude` will prevent a page from
+    appearing in the nav, even if it has a `nav_section`.
 
     Sections are ordered by the smallest weight assigned to them, with the Root
     section always being placed at the start. Non-Root sections with the same
-    weight are ordered alphabetically. Page links within each seaction
-    are ordered by nav_order/weight, or, if that is equal, by nav_title/title.
+    weight are ordered alphabetically. Page links within each seaction are
+    ordered by `nav_order`/`weight`, or, if that is equal, by
+    `nav_title`/`title`.
+
+    If any of the pages in the nav have the attribute `nav_parent` (or `parent`),
+    and the value of that is the `nav_title`/`title` (case-insensitive), `id`, or
+    `slug` of another page in the same `nav_section`, then they will be treated
+    as children of those pages. Normally, using the title of the parent is
+    sufficient to identify it. However, if there is more than one page with the
+    same `nav_title`, then it may be necessary to disambiguate by using the
+    `slug` or even (in exceptional cases) the `id` of the parent page instead.
+    Note that if the `parent` attribute does not match any of the other pages in
+    the same section, then it will be ignored.
     """
     autonav = []
-    root_section = []
-    sections = {}
     fallback_weight = 2**32 - 1
+    sortkey = lambda x: (x['order'], x['title'])
+    sections = {'root': {'has_nesting': False, 'weight': 0, 'items': []}}
     for it in content:
         pg = it['data']['page']
-        if not pg.nav_section:
+        if not pg.nav_section or pg.nav_exclude:
             continue
+        # NOTE: Only Root section is case-insensitive
+        seckey = 'root' if pg.nav_section.lower() == 'root' else pg.nav_section
         item_weight = pg.nav_order or pg.weight or fallback_weight
+        parent = pg.nav_parent if 'nav_parent' in pg else (pg.parent or None)
         rec = {
             'title': pg.nav_title or pg.title,
             'url': it['url'],
             'order': item_weight,
+            'slug': pg.slug,
+            'id': pg['id'],
+            'children': [],
+            'parent': parent,
+            'subitem': False,
         }
-        if pg.nav_section.lower() == 'root':
-            root_section.append(rec)
-        elif pg.nav_section not in sections:
-            sections[pg.nav_section] = {'weight': item_weight, 'items': [rec]}
+        if seckey not in sections:
+            sections[seckey] = {
+                'has_nesting': True if rec['parent'] else False,
+                'weight': item_weight,
+                'items': [rec],
+            }
         else:
-            sections[pg.nav_section]['items'].append(rec)
-            if sections[pg.nav_section]['weight'] > item_weight:
-                sections[pg.nav_section]['weight'] = item_weight
-    sortkey = lambda x: (x['order'], x['title'])
-    root_section.sort(key=sortkey)
-    for it in root_section:
-        autonav.append({it['title']: it['url']})
+            sections[seckey]['items'].append(rec)
+            if sections[seckey]['weight'] > item_weight:
+                sections[seckey]['weight'] = item_weight
+            if rec['parent']:
+                sections[seckey]['has_nesting'] = True
+    # Handle nesting
+    for seckey in sections:
+        if not sections[seckey]['has_nesting']:
+            continue
+        items = sections[seckey]['items']
+        # pass 1: assign children
+        for it in items:
+            par = it['parent']
+            if par:
+                parlow = par.lower()
+                for it2 in items:
+                    if it2['id'] == par or it2['slug'] == par or it2['title'].lower() == parlow:
+                        it2['children'].append(it)
+                        it['subitem'] = True
+                        break
+        # pass 2: sort children by weight
+        for it in items:
+            if it['children']:
+                it['children'].sort(key=sortkey)
+        # pass 3: remove subitems (items that are children) from top level
+        for i in reversed(range(len(items))):
+            if items[i]['subitem']:
+                items.pop(i)
+    root_section = sections.pop('root')
+    root_section['items'].sort(key=sortkey)
+    for it in root_section['items']:
+        autonav.append(it)
     for section in sorted(list(sections.keys()), key=lambda x: (sections[x]['weight'], x)):
-        items = []
-        for it in sorted(sections[section]['items'], key=sortkey):
-            items.append({it['title']: it['url']})
+        items = sections[section]['items']
+        items.sort(key=sortkey)
         autonav.append({section: items})
     return Nav(autonav)
 

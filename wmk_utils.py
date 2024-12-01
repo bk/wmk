@@ -807,8 +807,10 @@ class NavBase:
     previous = None  # only applicable to *local* links
     attr = {} # things like link_target, css_class, css_id...
 
-
     def nav_item_list(self, items, level=-1):
+        """
+        For assembling a nav from a properly formatted list.
+        """
         ret = []
         for it in items:
             if not isinstance(it, dict):
@@ -817,17 +819,31 @@ class NavBase:
             if 'title' in it and 'children' in it:
                 title = it.pop('title')
                 children = it.pop('children')
-                ret.append(
-                    NavSection(title=title, children=children,
-                               parent=self, level=level+1, attr=it))
+                url = it.pop('url') if 'url' in it else None
+                if children:
+                    ret.append(
+                        NavSection(
+                            title=title, children=children,
+                            parent=self, level=level+1, url=url, attr=it))
+                else:
+                    ret.append(
+                        NavLink(
+                            title=title, url=url, parent=self,
+                            level=level+1, attr=it))
                 continue
             elif len(it) != 1:
                 raise ValueError('Bad input: ' + str(it))
             for title in it:
                 if isinstance(it[title], list):
+                    if ' [url=' in title:
+                        _title, url = title.split(' [url=')
+                        url = url.rstrip(']')
+                    else:
+                        _title = title
+                        url = None
                     ret.append(
-                        NavSection(title=title, children=it[title],
-                                   parent=self, level=level+1))
+                        NavSection(title=_title, children=it[title],
+                                   parent=self, level=level+1, url=url))
                 elif isinstance(it[title], str):
                     ret.append(
                         NavLink(title=title, url=it[title],
@@ -838,6 +854,19 @@ class NavBase:
                         NavLink(title=title, url=it[title]['url'],
                                 parent=self, level=level+1, attr=it[title]))
         return ret
+
+    def find_item(self, title=None, url=None):
+        "Find item in nav by title or url."
+        for child in self.children:
+            if title and child.title.lower() == title.lower():
+                return child
+            elif url and child.url == url:
+                return child
+            elif child.children:
+                found = child.find_item(title=title, url=url)
+                if found:
+                    return found
+        return None
 
 
 class NavItem(NavBase):
@@ -854,6 +883,15 @@ class NavItem(NavBase):
     def siblings(self):
         parent = self.parent
         return [c for c in self.parent.children if c != self]
+
+    @property
+    def is_local(self):
+        if 'is_local' in self.attr:
+            return self.attr['is_local']
+        if not self.url:
+            return False
+        return not self.url.startswith(('https:', 'http:', 'mailto:'))
+
 
 
 class NavLink(NavItem):
@@ -894,12 +932,6 @@ class NavLink(NavItem):
         ret += self.title + ': ' + self.url + "\n"
         return ret
 
-    @property
-    def is_local(self):
-        if 'is_local' in self.attr:
-            return self.attr['is_local']
-        return not self.url.startswith(('https:', 'http:'))
-
     def __repr__(self):
         return 'NavLink %s: %s [level=%d]' % (self.title, self.url, self.level)
 
@@ -907,23 +939,30 @@ class NavLink(NavItem):
 class NavSection(NavItem):
     is_section = True
 
-    def __init__(self, title, children, parent=None, level=0, attr=None):
+    def __init__(self, title, children, parent=None, level=0, url=None, attr=None):
         self.title = title
         self.children = self.nav_item_list(children, level=level)
         self.parent = parent
         self.level = level
+        self.url = url
         if attr:
             self.attr = attr
 
     def _indented(self):
         ret = "  " * self.level or ''
-        ret += self.title + ":\n"
+        maybe_url = ''
+        if self.url:
+            maybe_url = ' [url={}]'.format(self.url)
+        ret += self.title + maybe_url + ":\n"
         for c in self.children:
             ret += c._indented()
         return ret
 
     def _links_in_order(self):
+        # NOTE: This now also contains NavSections if they have a url.
         links = []
+        if self.url and self.is_local:
+            links.append(self)
         for it in self.children:
             if it.children:
                 sublinks = it._links_in_order()
@@ -934,9 +973,9 @@ class NavSection(NavItem):
 
     def contains_url(self, url, normalize, best=False):
         """
-        This section contains a link for which contains_url() is True given
-        the conditions. If best is True, the link must be an immediate child of
-        this section (i.e. not of a subsection).
+        This section contains a link for which contains_url() is True given the
+        conditions. If best is True, the link must be an immediate child of this
+        section (i.e. not of a subsection).
         """
         if best:
             links = [_ for _ in self.children if isinstance(_, NavLink)]
@@ -946,8 +985,8 @@ class NavSection(NavItem):
         return True if links else False
 
     def __repr__(self):
-        return 'NavSection %s [level=%d, children=%d]' % (
-            self.title, self.level, len(self.children))
+        return 'NavSection %s [level=%d, children=%d, url=%s]' % (
+            self.title, self.level, len(self.children), self.url)
 
     def __iter__(self):
         return iter(self.children)
@@ -971,7 +1010,7 @@ class Nav(NavSection):
 
         nav:
           - Home: 'index.html'
-          - User Guide:
+          - 'User Guide [url=guide]':
             - Writing: writing
             - Styling: styling
           - Resources:

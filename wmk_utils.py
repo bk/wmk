@@ -855,12 +855,14 @@ class NavBase:
                                 parent=self, level=level+1, attr=it[title]))
         return ret
 
-    def find_item(self, title=None, url=None):
+    def find_item(self, title=None, url=None, normalize=None):
         "Find item in nav by title or url."
+        if normalize is None:
+            normalize = lambda x: x
         for child in self.children:
             if title and child.title.lower() == title.lower():
                 return child
-            elif url and child.url == url:
+            elif url and normalize(child.url) == normalize(url):
                 return child
             elif child.children:
                 found = child.find_item(title=title, url=url)
@@ -892,6 +894,30 @@ class NavItem(NavBase):
             return False
         return not self.url.startswith(('https:', 'http:', 'mailto:'))
 
+    def is_url(self, url, normalize):
+        "The given url is the same as self.url after normalization."
+        if not self.url:
+            return False
+        return normalize(url) == normalize(self.url)
+
+    def descendant_is_url(self, url, normalize):
+        "Has a descendant for which is_url() is True."
+        if not self.children:
+            return False
+        for child in self.children:
+            if child.is_url(url, normalize):
+                return True
+            elif child.is_section:
+                return child.descendant_is_url(url, normalize)
+        return False
+
+    def parent_is_url(self, url, normalize):
+        "Has an ancestor for which is_url() is True."
+        if not self.parent:
+            return False
+        if self.parent.is_url(url, normalize):
+            return True
+        return self.parent.parent_is_url(url, normalize)
 
 
 class NavLink(NavItem):

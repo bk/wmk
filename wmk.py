@@ -347,6 +347,9 @@ def auto_nav_from_content(content):
                 parlow = par.lower()
                 for it2 in items:
                     if it2['id'] == par or it2['slug'] == par or it2['title'].lower() == parlow:
+                        # TODO: detect duplicate titles and pick the one nearest
+                        # (by weight or wrt directory structure), thus reducing
+                        # the need for using slug/id. Maybe support 'nav_id' attr?
                         it2['children'].append(it)
                         it['subitem'] = True
                         break
@@ -656,9 +659,12 @@ def get_config(basedir, conf_file):
     filename = os.path.join(basedir, conf_file)
     conf_dir = os.path.join(basedir, conf_file.replace('.yaml', '.d'))
     conf = {}
+    # Note that unsafe loading is only allowed for the top-level config, i.e.
+    # wmk_config.yaml (either prject or theme). This allows python-specific
+    # expressions, such as '!!python/name:my_package.containing.my_def'
     if os.path.exists(filename):
         with open(filename) as f:
-           conf = yaml.safe_load(f) or {}
+           conf = yaml.load(f, yaml.UnsafeLoader) or {}
     # Look for yaml files inside data/wmk_config.d.  Each file contains the
     # value for the key specified by the path name to it, e.g. ./site/info.yaml
     # contains the value of site.data. (The contents of ./site.yaml, if present,

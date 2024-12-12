@@ -1,9 +1,9 @@
-<%page args="match, label=None, ordering=None, fallback=None, unique=False, link_attr=None, link_append=None" />\
+<%page args="match, label=None, ordering=None, fallback=None, unique=False, link_attr=None, link_append=None, url_only=False" />\
 <%!
 import re
 default_fallback = '(LINKTO: page not found for "%s")'
 
-def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_append, nth):
+def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_append, url_only, nth):
     placeholder = '((LINKTO::%d))' % nth
     if not fallback:
         fallback = default_fallback % str(match)
@@ -11,6 +11,8 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_app
         link_attr = 'class="linkto"'
     if link_append is None:
         link_append = ''
+    if url_only is None:
+        url_only = False
     if isinstance(match, str):
         # heuristics for interpreting the match pattern before
         # passing to page_match()
@@ -48,11 +50,14 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_app
                 'LINKTO: multiple matches found for "%s"' % str(match))
         elif found:
             url = found[0]['url'].replace('/index.html', '/')
-            repl = '<a %s href="%s%s">%s</a>'  % (
-                link_attr,
-                url,
-                link_append,
-                (label or found[0]['data']['page'].title))
+            if url_only:
+                repl = url + link_append
+            else:
+                repl = '<a %s href="%s%s">%s</a>'  % (
+                    link_attr,
+                    url,
+                    link_append,
+                    (label or found[0]['data']['page'].title))
         return html.replace(placeholder, repl)
     return cb
 %>\
@@ -60,6 +65,6 @@ def linkto_handler(match, label, ordering, fallback, unique, link_attr, link_app
 if not 'POSTPROCESS' in page:
     page.POSTPROCESS = []
 page.POSTPROCESS.append(
-    linkto_handler(match, label, ordering, fallback, unique, link_attr, link_append, nth))
+    linkto_handler(match, label, ordering, fallback, unique, link_attr, link_append, url_only, nth))
 %>\
 ((LINKTO::${nth}))\

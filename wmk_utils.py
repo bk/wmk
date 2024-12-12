@@ -6,6 +6,7 @@ import sqlite3
 import hashlib
 import json
 import locale
+from mako.exceptions import TemplateLookupException
 
 
 def slugify(s):
@@ -247,7 +248,98 @@ class MDContentList(list):
     def path_match(self, src_pred):
         return self.match_entry(lambda x: src_pred(x['source_file_short']))
 
+    def get_content_taxonomies(self):
+        """
+        Get information about the taxonomies that have been singled out in
+        content files using the TAXONOMY feature.
+        """
+        ret = []
+        for it in self:
+            pg = it['data']['page']
+            tx = pg.TAXONOMY
+            if tx:
+                tx_name = tx.name or (
+                    tx.taxon[0] if isinstance(tx.taxon, list) else tx.taxon)
+                item_urlpat = re.sub(r'/index.html$', '/{}/index.html', it['url'])
+                ret.append({
+                    'taxon': tx.taxon,
+                    'order': tx.order or 'name',
+                    'name': tx_name,
+                    'name_singular': tx.name_singular or None,
+                    'name_plural': tx.name_plural or None,
+                    'list_url': it['url'],
+                    'item_url_pattern': item_urlpat, # expand with .format(slugify(item))
+                    'page_id': pg['id'],
+                })
+        return ret
+
+    def get_used_taxonomies(self):
+        """
+        Get all known taxonomies that are present in this MDContent list. These
+        are (1) the standard taxonomies tags, sections, categories and authors;
+        and (2) anything defined under as a TAXONOMY in a content page.  Returns
+        a list of dicts with the keys 'taxon', 'name', 'name_singular' and
+        'name_plural'. If the taxonomy belongs to the latter group, then
+        'order', 'list_url', 'item_url_pattern' and 'page_id' will be present as
+        well. If a standard taxonomy has been handled as a content page
+        TAXONOMY, the latter type takes precedence (i.e. the standard one is
+        omitted from the list).
+        """
+        standard = [
+            {
+                'name': 'tags',
+                'name_singular': 'tag',
+                'name_plural': 'tags',
+                'taxon': ['tags', 'tag'],
+            },
+            {
+                'name': 'section',
+                'name_singular': 'section',
+                'name_plural': 'sections',
+                'taxon': ['section', 'sections'],
+            },
+            {
+                'name': 'category',
+                'name_singular': 'category',
+                'name_plural': 'categories',
+                'taxon': ['category', 'categories'],
+            },
+            {
+                'name': 'author',
+                'name_singular': 'author',
+                'name_plural': 'authors',
+                'taxon': ['author', 'authors'],
+            },
+        ]
+        found = self.get_content_taxonomies() or []
+        known = set()
+        for it in found:
+            tx = it['taxon'] if isinstance(it['taxon'], (list, tuple)) else [it['taxon']]
+            for ti in tx:
+                known.add(ti)
+        for it in self:
+            pg = it['data']['page']
+            for std in standard:
+                if tuple(std['taxon']) in known:
+                    continue
+                is_known = False
+                is_present = False
+                for ti in std['taxon']:
+                    if ti in known:
+                        is_known = True
+                        break
+                    if pg.get(ti):
+                        is_present = True
+                if is_present and not is_known:
+                    found.append(std)
+                    known.add(tuple(std['taxon']))
+        return found
+
     def has_taxonomy(self, haystack_keys, needles):
+        """
+        Look for instances of `needles` (e.g. `['good', 'bad']`) in the taxonomy
+        characterized by `haystack_keys` (.e.g `['tag', 'tags']`).
+        """
         if not needles:
             return MDContentList([])
         if not isinstance(needles, (list, tuple)):
@@ -535,7 +627,10 @@ class MDContentList(list):
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
         lookup = context.get('LOOKUP') or context.lookup
-        tpl = lookup.get_template(template)
+        try:
+            tpl = lookup.get_template(template)
+        except TemplateLookupException:
+            tpl = lookup.get_template('base/' + template)
         kw = dict(**context.kwargs) if hasattr(context, 'kwargs') else context
         kw['SELF_URL'] = dest
         kw['CHUNK'] = self

@@ -427,6 +427,8 @@ markdown (or other) content, receive the following context variables:
   object with a `FileSystemLoader` loader.
 - `site`: A dict-like object containing the variables specified under the `site`
   key in `wmk_config.yaml`.
+- `CACHE`: An ordinary dictionary object, intended for use by templates as a
+  simple shared in-memory cache.
 
 In the case of Jinja2 templates, three extra context variables are available:
 
@@ -435,7 +437,7 @@ In the case of Jinja2 templates, three extra context variables are available:
 - `get_context`: A function returning all context variables as a dict.
 - `import`: An alias for `importlib.import_module` and can thus be used to
   import a Python module into a Jinja template as the value of a variable, e.g.
-  `{% set utils = imp0rt('my_utils') %}`. The main intent is to make code inside
+  `{% set utils = import('my_utils') %}`. The main intent is to make code inside
   the project `py/` subdirectory as easily available in Jinja templates as it is
   in Mako templates.
 
@@ -946,7 +948,9 @@ The following default shortcodes are provided by the `wmk` installation:
   multiple pages are found to match; and `link_attr`, which is a string to
   insert into the `<a>` tag (by default `class="linkto"`). A query string or
   anchor ID fragment for the link can be added via `link_append`, e.g.
-  `link_append='#section2'` or `link_append='?q=searchstring'`.
+  `link_append='#section2'` or `link_append='?q=searchstring'`. If the boolean
+  parameter `url_only` is True, then the output will not be a link but only
+  the URL (including `link_append`, if any).
 
 - `pagelist`: Runs a `page_match()` and lists the found pages. Required argument:
   `match_expr`. Optional arguments: `exclude_expr`, `ordering`, `limit`,
@@ -1005,13 +1009,80 @@ The following default shortcodes are provided by the `wmk` installation:
 - `wp`: A link to Wikipedia. One required argument: `title`. Optional arguments:
   `label`, `lang`. Example: `{{< wp('L.L. Zamenhof', lang='eo') >}}`.
 
+<!-- lib_templates "Template library" 105 -->
+
+## Template library
+
+It is generally up to the site or theme author to define any needed Mako/Jinja
+templates. In rare cases, however, the templates are general enough that it may
+be natural to distribute them with wmk itself in the form of a Mako template
+library located under `/lib/`.
+
+### seo.mc
+
+The template `/lib/seo.mc` makes it easier to format metadata for use in the
+`<head>` section of a base template. It is used in something like the following
+way:
+
+```mako
+<%namespace import="seo" file="/lib/seo.mc" />
+% if page:
+  ${ seo(site, page, url=SELF_URL, title=self.page_title) }
+% else:
+  ${ seo(site, page=None, url=SELF_URL, title=self.page_title,
+         img=self.attr.main_image) }
+% endif
+```
+
+This will add common meta tags (including basic OpenGraph and JSON-LD
+information). By default, it also adds a `<title>` tag. For further details
+regarding the functionality, see the template file itself.
+
+### atom_xml.mc
+
+The template `/lib/atom_xml.mc` can be used to facilitate the creation of an
+Atom feed for the website.  Set `site.base_url` to a valid URL and set
+`site.atom_feed` to a true value.  Then create a file named `atom.xml.mhtml` in
+the template root, containing something like the following:
+
+```mako
+<%namespace name="atom" file="/lib/atom_xml.mc" />\
+${ atom.feed(contentlist=MDCONTENT.sorted_by_date()) }\
+```
+
+There are several optional parameters (`with_img`, `get_img`, `with_summary`,
+`get_summary`, `pubdate_attr`, `updated_attr`, `with_full_text`, `limit`) for
+tweaking the output.
+
+### sitemap_xml.mc
+
+Similarly, `/lib/sitemap_xml.mc` can be used to create a `siteamp.xml` file.
+Set `site.enable_sitemap` to a true value and ensure that `site.base_url` is present.
+Then create a file named `sitemap.xml.mhtml` in the template root, with the
+following content:
+
+```mako
+<%namespace import="sitemap" file="/lib/sitemap_xml.mc" />\
+${ sitemap(contentlist=MDCONTENT) }\
+```
+
+### Usage in Jinja templates
+
+No Jinja version of these components has been created, but the Mako version
+can be called from a Jinja2 template using code such as the following:
+
+```jinja2
+{% set seo = mako_lookup.get_template("/lib/seo.mc").get_def("seo") %}
+{{ seo.render(site, page, url=SELF_URL, title=page.title) |safe }}
+```
+
 <!-- pagevars "Site, page and nav variables" 110 -->
 
 ## Site, page and nav variables
 
 When a markdown file (or other supported content) is rendered, the Mako template
 receives a number of context variables as partly described above. A few of these
-variables, such as `MDTEMPLATES` and `DATADIR` set directly by `wmk` (see
+variables, such as `MDTEMPLATES` and `DATADIR` are set directly by `wmk` (see
 above). Others are user-configured either (1) in `wmk_config.yaml` (the contents
 of the `site` object and potentially additional "global" variables in
 `template_context`); or (2) the cascade of `index.yaml` files in the `content`
@@ -1242,7 +1313,8 @@ page, provided that it contains at least the subkeys `taxon` and
 
 2. For each value in the list, wmk renders the template `detail_template` with
    the same context, except that the two keys `TAXON` (the value) and
-   `TAXON_INDEX` (the 0-based index of the value in the list) are added.
+   `TAXON_INDEX` (the 0-based index of the value in the list) are added. (If no
+   `detailt_template` is specified, then the template for the page is used).
    Each `TAXON` has `items` which represent the pages tagged with that director,
    and the main job of thet detail page is to show a list of them to the user.
    The result is written to a destination file the name of which is based on the
@@ -1259,7 +1331,7 @@ Please note that the settings in `list_settings` and `detail_settings` in the
 example above are merely for the purposes of illustration. Whether any of them
 are actually supported is entirely up to the template or theme author. The only
 subvariables used by wmk itself are `taxon`, `order` (if present), and
-`detail_template`.
+`detail_template` (if present).
 
 #### Variables affecting rendering
 
@@ -1649,6 +1721,17 @@ All of these return a new `MDContentList` object (at least by default).
 
 - `in_section(self, sectionlist)`: A shortcut method for
   `self.has_taxonomy(['section', 'sections'], sectionlist)`.
+
+- `get_used_taxonomies(self)`: Get a list of all known taxonomies that are
+  actually used by items in this MDContentList (i.e. content files).
+  These may be of two types: (1) the standard taxonomies tags, sections,
+  categories and authors; and (2) anything defined as a `TAXONOMY` in the
+  frontmatter of a page.  Returns a list of dicts with the keys `taxon`, `name`,
+  `name_singular` and `name_plural`. If the taxonomy belongs to the latter
+  group, then `order`, `list_url`, `item_url_pattern` and `page_id` will be
+  present as well, and `name_singular`/`name_plural` may be empty. If a standard
+  taxonomy (e.g. tags) has been handled as a content page `TAXONOMY`, then the
+  latter type takes precedence (i.e. the standard one is omitted from the list).
 
 - `group_by(self, pred, normalize=None, keep_empty=False)`: Group items in an
   MDContentList using a given criterion. Parameters: `pred` is a callable

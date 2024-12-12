@@ -29,7 +29,7 @@ import wmk_mako_filters as wmf
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.17'
+VERSION = '1.18'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -241,6 +241,7 @@ def get_template_vars(dirs, themedir, conf, assets_map=None):
         'WEBROOT': os.path.realpath(dirs['output']),
         'TEMPLATES': [],
         'MDCONTENT': MDContentList([]),
+        'CACHE': {}, # in-memory hash for caching in templates
     }
     template_vars.update(conf.get('template_context', {}))
     template_vars['site'] = attrdict(conf.get('site', {}))
@@ -837,7 +838,8 @@ def handle_taxonomy(data):
     - No return value.
     """
     txy = data['page'].TAXONOMY
-    if txy and 'taxon' in txy and 'detail_template' in txy:
+    if txy and 'taxon' in txy:
+        detail_template = txy.get('detail_template', data['page'].template)
         txy.valid = True
         maybe_order = {'order': txy['order']} if txy['order'] else {}
         taxons = data['MDCONTENT'].taxonomy_info(txy['taxon'], **maybe_order)
@@ -852,13 +854,13 @@ def handle_taxonomy(data):
                 raise Exception(
                     'handle_taxonomy() requires pretty_path to be active or auto')
             ctx = dict(**data)
-            ctx['SELF_TEMPLATE'] = txy['detail_template']
+            ctx['SELF_TEMPLATE'] = detail_template
             tx['url'] = dest
             tx['items'].write_to(
                 dest=dest,
                 context=ctx,
                 extra_kwargs={'TAXON': tx, 'TAXON_INDEX': i},
-                template=txy['detail_template'])
+                template=detail_template)
     elif txy:
         print("WARNING: BAD TAXONOMY for", data['SELF_URL'])
         txy.valid = False
@@ -1599,7 +1601,7 @@ def process_content_item(
 
 
 @hookable
-def generate_summary(content_item):
+def generate_summary(content_item, suppress_warning=False):
     """
     Generate the summary from the body (after it is rendered to HTML), if
     `page.generate_summary` is true. Maximum length can be configured with
@@ -1635,7 +1637,7 @@ def generate_summary(content_item):
             para += '…'
     if para:
         pg.summary = para
-    else:
+    elif not suppress_warning:
         print("WARNING: no autosummary for {}".format(
             content_item['data'].get('SELF_SHORT_PATH', '??')))
 

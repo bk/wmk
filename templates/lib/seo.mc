@@ -1,6 +1,8 @@
 <%doc>
   SEO relevant information for the <head> of the page.
-  Includes the <title> tag by default.
+  Includes the <title> tag by default. Much of the functionality
+  depends on `site.base_url` (and optionally the related attributes
+  `site.seo_base_url` and/or `site.leading_path`) to be set.
 </%doc>
 <%!
 import re
@@ -28,6 +30,7 @@ def add_baseurl(baseurl, url):
                 prev_url=None, next_url=None, with_prevnext=True,
                 generator=None, with_generator=True,
                 json_ld=None, with_json_ld=True,
+                robots=None,
                 page_type='article',
                 )">
 <!-- Begin /lib/seo.mc:seo -->
@@ -102,6 +105,13 @@ def add_baseurl(baseurl, url):
         if next_url and not next_url.startswith(('https:', 'http:')):
             next_url = add_baseurl(baseurl, prev_url)
 
+    if robots is None and page:
+        robots = page.robots or page.meta_robots or None
+        if robots is None and page.noindex:
+            robots = 'noindex,nofollow'
+    if isinstance(robots, (list, tuple)):
+        robots = robots.join(',')
+
     if with_json_ld:
         if json_ld is None:
             if page and page.json_ld:
@@ -144,78 +154,82 @@ def add_baseurl(baseurl, url):
 %>\
 % if with_title:
   <title>${ page_title }</title>
-  <meta property="og:title" content="${ page_title }" />
+  <meta property="og:title" content="${ page_title }">
 % endif
 % if with_generator:
-  <meta name="generator" content="${ generator or ('wmk v%s' % VERSION) }" />
+  <meta name="generator" content="${ generator or ('wmk v%s' % VERSION) }">
 % endif
 
 % if with_author and author:
-  <meta name="author" content="${ author }" />
+  <meta name="author" content="${ author }">
 % endif
 
 % if with_locale and locale:
-<meta property="og:locale" content="${ locale }" />
+<meta property="og:locale" content="${ locale }">
 % endif
 
 % if with_description and description:
-  <meta name="description" content="${ description }" />
-  <meta property="og:description" content="${ description }" />
-  <meta property="twitter:description" content="${ description }" />
+  <meta name="description" content="${ description }">
+  <meta property="og:description" content="${ description }">
+  <meta property="twitter:description" content="${ description }">
 % endif
 
 % if with_url and url:
-  <link rel="canonical" href="${ url }" />
-  <meta property="og:url" content="${ url }" />
+  <link rel="canonical" href="${ url }">
+  <meta property="og:url" content="${ url }">
 % endif
 
 % if with_site_name and site_name:
-  <meta property="og:site_name" content="${ site_name }" />
+  <meta property="og:site_name" content="${ site_name }">
 % endif
 
 % if with_img and img:
-  <meta property="og:image" content="${ img }" />
+  <meta property="og:image" content="${ img }">
 % endif
 
 % if page_type == 'article':
-  <meta property="og:type" content="article" />
+  <meta property="og:type" content="article">
   % if page and (page.pubdate or page.date):
-  <meta property="article:published_time" content="${ date_to_iso(page.pubdate or page.date) }}" />
+  <meta property="article:published_time" content="${ date_to_iso(page.pubdate or page.date) }}">
   % endif
 % else:
-  <meta property="og:type" content="website" />
+  <meta property="og:type" content="website">
 % endif
 
 % if with_prevnext and prev_url:
-  <link rel="prev" href="${ prev_url }" />
+  <link rel="prev" href="${ prev_url }">
 % endif
 % if with_prevnext and next_url:
-  <link rel="next" href="${ next_url }" />
+  <link rel="next" href="${ next_url }">
 % endif
 
 % if img:
-  <meta name="twitter:card" content="${ page.twitter.card or site.twitter.card or "summary_large_image" }" />
-  <meta property="twitter:image" content="${ img }" />
+  <meta name="twitter:card" content="${ page.twitter.card or site.twitter.card or "summary_large_image" }">
+  <meta property="twitter:image" content="${ img }">
 % else:
-  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:card" content="summary">
 % endif
 
-  <meta property="twitter:title" content="${ page_title }" />
+  <meta property="twitter:title" content="${ page_title }">
 
 % if site.twitter:
-  <meta name="twitter:site" content="@${ site.twitter.username.replace('@', '') }" />
+  <meta name="twitter:site" content="@${ site.twitter.username.replace('@', '') }">
 % endif
 
 % if site.facebook:
   % if site.facebook.admins:
-    <meta property="fb:admins" content="${ site.facebook.admins }" />
+    <meta property="fb:admins" content="${ site.facebook.admins }">
   % endif
   % if site.facebook.publisher:
-    <meta property="article:publisher" content="${ site.facebook.publisher }" />
+    <meta property="article:publisher" content="${ site.facebook.publisher }">
   % endif
   % if site.facebook.app_id:
-    <meta property="fb:app_id" content="${ site.facebook.app_id }" />
+    <meta property="fb:app_id" content="${ site.facebook.app_id }">
   % endif
+% endif
+
+% if robots:
+  <meta name="robots" content="${ robots }">
 % endif
 
 <script type="application/ld+json">${ to_json(json_ld) }</script>

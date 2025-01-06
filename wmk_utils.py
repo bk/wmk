@@ -55,6 +55,26 @@ def slugify(s):
     return ret + ext
 
 
+def dartsass_compile(
+        dirname, output_style='expanded', include_paths=None,
+        dartsass_bin=None):
+    """
+    Minimal and partial replacement for sass.compile, using the dart-sass cli
+    rather than libsass. Assumes that `sass` is in your PATH and that it is
+    dart-sass -- unless dartsass_bin points to a specific path.
+    """
+    cmd = [dartsass_bin or 'sass']
+    if not output_style == 'compressed':
+        output_style = 'expanded'
+    cmd += ['-s', output_style]
+    if include_paths:
+        for inc in include_paths:
+            cmd += ['-I', inc.replace(' ', r'\ ')]
+    cmd.append(('%s:%s' % dirname).replace(' ', r'\ '))
+    cmd = ' '.join(cmd)
+    os.system(cmd)
+
+
 class attrdict(dict):
     """
     Dict with the keys as attributes (or member variables), for nicer-looking

@@ -11,7 +11,7 @@ might almost call them standard:
 
 - Markdown or HTML content with YAML metadata in the frontmatter.
 - Support for themes.
-- Sass/SCSS support (via [`libsass`][libsass]).
+- Sass/SCSS support (via either [`libsass`][libsass] or [Dart Sass][dartsass]).
 - Can generate a search index for use by [`lunr.js`][lunr].
 - Shortcodes for more expressive and extensible content.
 
@@ -49,6 +49,7 @@ That exception aside, wmk is suitable for building any small or medium-sized
 static website (up to a couple of thousand pages, depending on the content).
 
 [libsass]: https://sass.github.io/libsass-python/
+[dartsass]: https://sass-lang.com/dart-sass/
 [lunr]: https://lunrjs.com/
 [mako]: https://www.makotemplates.org/
 [jinja]: https://jinja.palletsprojects.com/
@@ -595,9 +596,19 @@ Currently there is support for the following settings:
 - `use_sass`: A boolean indicating whether to handle Sass/SCSS files in `assets/scss`
   automatically. True by default.
 
+- `use_dart_sass`: By default, Sass/SCSS is handled by libsass. If
+  `use_dart_sass` is true, Dart Sass is used instead. This requires it to be
+  installed as an external command.
+
+- `dart_sass_bin`: This can be set to point to the location of the `sass`
+  executable that will be run when `use_dart_sass` is true. Normally not needed
+  unless `sass` is not in your `PATH` or you want to add parameters (or use a
+  specific version).
+
 - `sass_output_style`: The output style for Sass/SCSS rendering. This should be
   one of `compact`, `compressed`, `expanded` or `nested`. The default is
-  `expanded`. Has no effect if `use_sass` is false.
+  `expanded`. Has no effect if `use_sass` is false. When using Dart Sass,
+  `compact` and `nested` have the same effect as `expanded`.
 
 - `assets_map`: An assets map is a mapping from filenames or aliases to names
   of files containing a hash identifier (under the webroot). A typical entry

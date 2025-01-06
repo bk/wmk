@@ -23,13 +23,14 @@ from mako.lookup import TemplateLookup
 from mako.exceptions import text_error_template, TemplateLookupException
 
 from wmk_utils import (
-    slugify, attrdict, MDContentList, RenderCache, Nav, Toc, hookable)
+    slugify, attrdict, MDContentList, RenderCache, Nav, Toc, hookable,
+    dartsass_compile)
 import wmk_mako_filters as wmf
 
 # To be imported from wmk_autoload and/or wmk_theme_autoload, if applicable
 autoload = {}
 
-VERSION = '1.18.1'
+VERSION = '1.19'
 
 # Template variables with these names will be converted to date or datetime
 # objects (depending on length) - if they conform to ISO 8601.
@@ -1155,6 +1156,9 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
             print('  **WARNING** assets command error [exitcode={}]:'.format(
                 ret.returncode), ret.stderr)
     sass_active = conf.get('use_sass', True)
+    use_dart_sass = conf.get('use_dart_sass', False)
+    if use_dart_sass and not sass_active:
+        sass_active = True
     if not sass_active:
         return
     scss_input = os.path.join(assetdir, 'scss')
@@ -1169,18 +1173,32 @@ def process_assets(assetdir, theme_assets, outputdir, conf, css_dir_from_start, 
     if theme_scss and (
             force or not css_dir_from_start or not dir_is_older_than(theme_scss, css_output)):
         force = True  # since timestamp check for normal scss is now useless
-        sass.compile(
-            dirname=(theme_scss, css_output), output_style=output_style)
-        print('[%s] - sass: theme' % datetime.datetime.now())
+        if use_dart_sass:
+            dartsass_compile(
+                dirname=(theme_scss, css_output),
+                output_style=output_style,
+                dartsass_bin=conf.get('dart_sass_bin'))
+            print('[%s] - dart-sass: theme' % datetime.datetime.now())
+        else:
+            sass.compile(
+                dirname=(theme_scss, css_output), output_style=output_style)
+            print('[%s] - sass: theme' % datetime.datetime.now())
     if force or not css_dir_from_start or not dir_is_older_than(scss_input, css_output):
         if not os.path.exists(scss_input):
             return
         include_paths = {}
         if theme_scss:
             include_paths = {'include_paths': [theme_scss]}
-        sass.compile(
-            dirname=(scss_input, css_output), output_style=output_style, **include_paths)
-        print('[%s] - sass: refresh' % datetime.datetime.now())
+        if use_dart_sass:
+            dartsass_compile(
+                dirname=(scss_input, css_output),
+                output_style=output_style,
+                dartsass_bin=conf.get('dart_sass_bin'),
+                **include_paths)
+        else:
+            sass.compile(
+                dirname=(scss_input, css_output), output_style=output_style, **include_paths)
+            print('[%s] - sass: refresh' % datetime.datetime.now())
 
 
 @hookable

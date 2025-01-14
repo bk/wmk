@@ -308,6 +308,8 @@ if their file extension. The following extensions are recognized by default:
 
 - `.rst`: ReStructured Text format (RST).
 
+- `.pod` (as well as `.pm` and `.pl`): Perl POD (Plain Old Documentation).
+
 - `.textile`: Textile markup format.
 
 - `.dj`: The Djot lightweight markup format.
@@ -333,7 +335,8 @@ if their file extension. The following extensions are recognized by default:
 
 Pandoc is turned on automatically for all non-markdown, non-HTML formats in the
 above list.  In order to use such content, a sufficiently recent version of
-Pandoc therefore *must* be installed.
+Pandoc therefore *must* be installed. Full support for the above list requires
+Pandoc version 3.6.2 or later.
 
 The list of input formats and how they are handled is configurable through the
 `content_extensions` setting in the config file.
